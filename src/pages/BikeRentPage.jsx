@@ -34,148 +34,210 @@ import html2canvas from 'html2canvas';
 
 import axios from 'axios'; 
 
-// 1. Define la URL base de la API
-const API_URL_BASE = process.env.REACT_APP_URL;
+// 1. Define la URL base de la API (compatible con Vite)
+const API_URL_BASE = import.meta.env.VITE_URL;
 
 // 2. Define las URLs completas para los endpoints
 const API_URL_BIKES = `${API_URL_BASE}/api/bikes`; // URL para obtener bicicletas
 const API_URL_RENTALS = `${API_URL_BASE}/api/rentals`; // URL para registrar arriendos
 
-// Constante para el precio por hora de arriendo (ejemplo: $2.500)
-const RENTAL_PRICE_PER_HOUR = 2500;
+// Componente para la Tarjeta de Bicicleta de Arriendo
+const BikeCard = ({ bike, onRent }) => {
+  return (
+    <Card 
+      sx={{ 
+        height: 400, 
+        width: 300, 
+        display: 'flex', 
+        flexDirection: 'column',
+        boxShadow: 3, 
+        border: '1px solid #e0e0e0', 
+        borderRadius: '8px',
+        transition: 'transform 0.3s',
+        '&:hover': {
+          transform: 'translateY(-4px)',
+          boxShadow: 6,
+        }
+      }}
+    >
+      <CardMedia
+        component="img"
+        height="194"
+        sx={{ objectFit: 'contain' }}
+        image={bike.imageUrl || 'https://via.placeholder.com/345x194.png?text=Sin+Imagen'}
+        alt={bike.name}
+      />
+      <CardContent sx={{ flexGrow: 1 }}>
+        <Typography gutterBottom variant="h6" component="div">
+          {bike.name}
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          {bike.brand} - {bike.type}
+        </Typography>
+        <Typography variant="h5" color="secondary" sx={{ mt: 1, fontWeight: 'bold' }}>
+          ${bike.hourlyRate ? bike.hourlyRate.toLocaleString('es-CL') : 'N/A'} / hora
+        </Typography>
+      </CardContent>
+      <CardActions sx={{ mt: 'auto', p: 2 }}>
+        <Button 
+          size="small" 
+          variant="contained" 
+          color="primary"
+          onClick={() => onRent(bike)}
+        >
+          Arrendar
+        </Button>
+      </CardActions>
+    </Card>
+  );
+};
 
+// Componente principal de la página de arriendo
 function BikeRentPage() {
   const [bikes, setBikes] = useState([]);
-  const [selectedBike, setSelectedBike] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [openDialog, setOpenDialog] = useState(false);
-
-  const [customerName, setCustomerName] = useState('');
-  const [customerEmail, setCustomerEmail] = useState('');
+  const [selectedBike, setSelectedBike] = useState(null);
+  
+  // Estados para el formulario de arriendo
   const [startDate, setStartDate] = useState(null);
   const [endDate, setEndDate] = useState(null);
+  const [customerName, setCustomerName] = useState('');
+  const [customerEmail, setCustomerEmail] = useState('');
   const [totalPrice, setTotalPrice] = useState(0);
 
+  // Estados para Snackbar
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const [snackbarSeverity, setSnackbarSeverity] = useState('success');
-  const [rentConfirmationDetails, setRentConfirmationDetails] = useState(null);
-  const [loadingRent, setLoadingRent] = useState(false);
 
-  // Función para obtener las bicicletas disponibles (se ejecuta al cargar la página)
+  // Cargar las bicicletas al iniciar el componente
   useEffect(() => {
     const fetchBikes = async () => {
       try {
-        setLoading(true);
-        // Usa la URL de bicicletas actualizada
+        // Asumiendo que el endpoint `api/bikes` devuelve solo las bicicletas disponibles para arriendo
         const response = await axios.get(API_URL_BIKES);
-        // Filtra las bicicletas disponibles para arriendo (suponiendo que hay un campo 'availableForRent' en el backend)
-        const availableBikes = response.data.filter(bike => bike.availableForRent); 
-        setBikes(availableBikes);
+        setBikes(response.data);
         setLoading(false);
       } catch (err) {
-        console.error("Error al obtener bicicletas:", err);
-        setError("No se pudieron cargar las bicicletas para arriendo.");
+        console.error('Error al cargar bicicletas:', err);
+        setError('No se pudo cargar la lista de bicicletas. Intenta de nuevo más tarde.');
         setLoading(false);
       }
     };
     fetchBikes();
   }, []);
 
-  // Función para calcular el precio
-  const calculatePrice = (start, end) => {
-    if (start && end && end > start) {
-      // Diferencia en minutos
-      const durationMinutes = differenceInMinutes(end, start);
-      // Precio por minuto basado en el precio por hora
-      const pricePerMinute = RENTAL_PRICE_PER_HOUR / 60;
-      // Cálculo del precio total
-      const price = durationMinutes * pricePerMinute;
-      setTotalPrice(price);
+  // Calcular el precio total cuando cambian las fechas o la bicicleta seleccionada
+  useEffect(() => {
+    if (startDate && endDate && selectedBike && selectedBike.hourlyRate && endDate > startDate) {
+      // Calcular la diferencia en minutos entre las fechas
+      const durationMinutes = differenceInMinutes(endDate, startDate);
+      // Convertir minutos a horas y redondear al bloque de hora más cercano (hacia arriba)
+      const durationHours = Math.ceil(durationMinutes / 60); 
+      
+      const calculatedPrice = durationHours * selectedBike.hourlyRate;
+      setTotalPrice(calculatedPrice);
     } else {
       setTotalPrice(0);
     }
-  };
-
-  // Observa cambios en startDate y endDate para recalcular el precio
-  useEffect(() => {
-    calculatePrice(startDate, endDate);
-  }, [startDate, endDate]);
+  }, [startDate, endDate, selectedBike]);
 
   const handleOpenDialog = (bike) => {
     setSelectedBike(bike);
+    // Resetear las fechas al abrir el diálogo
+    setStartDate(null);
+    setEndDate(null);
+    setCustomerName('');
+    setCustomerEmail('');
     setOpenDialog(true);
   };
 
   const handleCloseDialog = () => {
     setOpenDialog(false);
-    // Reiniciar estados del diálogo
-    setCustomerName('');
-    setCustomerEmail('');
-    setStartDate(null);
-    setEndDate(null);
-    setTotalPrice(0);
     setSelectedBike(null);
   };
 
-  // Función para manejar la confirmación del arriendo
+  // Generar PDF de confirmación de arriendo
+  const generateRentConfirmationPDF = (details) => {
+    const doc = new jsPDF();
+    
+    doc.setFontSize(22);
+    doc.text('Confirmación de Arriendo - MasterBike', 10, 20);
+
+    doc.setFontSize(16);
+    doc.text('Detalles del Cliente y Arriendo', 10, 40);
+    doc.setFontSize(12);
+    doc.text(`Cliente: ${details.customerName}`, 10, 50);
+    doc.text(`Email: ${details.customerEmail}`, 10, 57);
+    doc.text(`Bicicleta: ${details.bikeName} (${details.bikeBrand})`, 10, 64);
+    doc.text(`Fecha de Inicio: ${details.startDate}`, 10, 71);
+    doc.text(`Fecha de Término: ${details.endDate}`, 10, 78);
+    doc.text(`Duración Estimada (Horas): ${details.durationHours}`, 10, 85);
+
+    doc.setFontSize(18);
+    doc.text(`Total Pagado: $${details.totalPrice.toLocaleString('es-CL')}`, 10, 100);
+
+    doc.setFontSize(10);
+    doc.text('Gracias por preferir MasterBike. Disfruta tu arriendo!', 10, 120);
+
+    doc.save(`Confirmacion_Arriendo_${Date.now()}.pdf`);
+  };
+
+  // Enviar solicitud de arriendo al backend
   const handleConfirmRent = async () => {
-    // Validaciones básicas
-    if (!customerName || !customerEmail || !selectedBike || !startDate || !endDate || endDate <= startDate) {
-      setSnackbarMessage('Por favor, completa todos los datos y asegúrate de que las fechas sean válidas.');
-      setSnackbarSeverity('warning');
-      setSnackbarOpen(true);
+    if (!startDate || !endDate || !customerName || !customerEmail || totalPrice <= 0) {
+      showSnackbar('Por favor, completa todos los campos y verifica las fechas.', 'error');
       return;
     }
 
-    setLoadingRent(true);
-
-    const rentalData = {
-      bikeId: selectedBike._id,
-      customerName,
-      customerEmail,
-      startDate: startDate.toISOString(), // Enviar en formato ISO
-      endDate: endDate.toISOString(),
-      totalPrice,
-      status: 'Confirmado'
-    };
-
     try {
-      // Usa la URL de arriendos actualizada
+      const rentalData = {
+        bikeId: selectedBike._id,
+        customerName,
+        customerEmail,
+        startDate,
+        endDate,
+        totalPrice,
+      };
+
+      // Envía los datos al backend
       const response = await axios.post(API_URL_RENTALS, rentalData);
       
-      setSnackbarMessage('Arriendo confirmado con éxito!');
-      setSnackbarSeverity('success');
-      setSnackbarOpen(true);
+      console.log('Arriendo registrado:', response.data);
       
-      // Guarda los detalles de confirmación para el PDF
-      setRentConfirmationDetails(response.data); 
-      
+      // Preparar detalles para el PDF
+      const durationMinutes = differenceInMinutes(endDate, startDate);
+      const durationHours = Math.ceil(durationMinutes / 60);
+
+      const pdfDetails = {
+        customerName,
+        customerEmail,
+        bikeName: selectedBike.name,
+        bikeBrand: selectedBike.brand,
+        startDate: format(startDate, 'dd/MM/yyyy HH:mm', { locale: es }),
+        endDate: format(endDate, 'dd/MM/yyyy HH:mm', { locale: es }),
+        durationHours,
+        totalPrice,
+      };
+
       // Generar y descargar el PDF de confirmación
-      generateRentConfirmationPDF(response.data);
+      generateRentConfirmationPDF(pdfDetails);
       
-      // Cierra el diálogo y actualiza la lista de bicicletas (para marcar la bici como no disponible si es necesario)
+      showSnackbar('Arriendo confirmado y registrado exitosamente. Se ha descargado la confirmación en PDF.', 'success');
       handleCloseDialog();
-      fetchBikes(); // Re-fetch para actualizar el estado del inventario
       
-    } catch (err) {
-      console.error("Error al registrar el arriendo:", err.response ? err.response.data : err.message);
-      setSnackbarMessage(err.response?.data?.message || 'Error al confirmar el arriendo. Intenta de nuevo.');
-      setSnackbarSeverity('error');
-    } finally {
-      setLoadingRent(false);
+    } catch (error) {
+      console.error('Error al registrar el arriendo:', error.response ? error.response.data : error.message);
+      showSnackbar('Error al registrar el arriendo. Intenta de nuevo.', 'error');
     }
   };
 
-  // Función para generar el PDF de confirmación de arriendo
-  const generateRentConfirmationPDF = (details) => {
-    // Código para generar el PDF de confirmación
-    const pdf = new jsPDF();
-    
-    // ... (Contenido del PDF) ...
-    
-    pdf.save(`Confirmacion_Arriendo_${details._id}.pdf`);
+  const showSnackbar = (message, severity) => {
+    setSnackbarMessage(message);
+    setSnackbarSeverity(severity);
+    setSnackbarOpen(true);
   };
 
   const handleSnackbarClose = (event, reason) => {
@@ -189,14 +251,14 @@ function BikeRentPage() {
     return (
       <Container sx={{ textAlign: 'center', mt: 8 }}>
         <CircularProgress />
-        <Typography variant="h6" sx={{ mt: 2 }}>Cargando bicicletas disponibles...</Typography>
+        <Typography variant="h6" sx={{ mt: 2 }}>Cargando bicicletas de arriendo...</Typography>
       </Container>
     );
   }
 
   if (error) {
     return (
-      <Container sx={{ textAlign: 'center', mt: 8 }}>
+      <Container sx={{ mt: 4 }}>
         <Alert severity="error">{error}</Alert>
       </Container>
     );
@@ -204,95 +266,66 @@ function BikeRentPage() {
 
   return (
     <Container sx={{ mt: 4, mb: 4 }}>
-      <Typography variant="h3" component="h1" gutterBottom sx={{ textAlign: 'center', mb: 6 }}>
-        Arriendo de Bicicletas
+      <Typography variant="h3" component="h1" gutterBottom sx={{ textAlign: 'center', fontWeight: 'bold' }}>
+        Arriendo de Bicicletas MasterBike
+      </Typography>
+      <Typography variant="body1" align="center" color="text.secondary" sx={{ mb: 4 }}>
+        Explora nuestra selección de bicicletas disponibles para arriendo por hora.
       </Typography>
 
-      <Typography variant="h5" gutterBottom sx={{ textAlign: 'center', mb: 4 }}>
-        Bicicletas Disponibles
-      </Typography>
-
-      {bikes.length === 0 ? (
-        <Alert severity="info" sx={{ mt: 3 }}>
-          No hay bicicletas disponibles para arriendo en este momento.
-        </Alert>
-      ) : (
-        <Grid container spacing={4} justifyContent="center">
-          {bikes.map((bike) => (
+      <Grid container spacing={4} sx={{ mt: 2 }} justifyContent="center">
+        {bikes.length === 0 ? (
+          <Grid item xs={12}>
+            <Alert severity="info">No hay bicicletas disponibles para arriendo en este momento.</Alert>
+          </Grid>
+        ) : (
+          bikes.map((bike) => (
             <Grid item key={bike._id} xs={12} sm={6} md={4} lg={3}>
-              <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column', boxShadow: 3 }}>
-                <CardMedia
-                  component="img"
-                  height="194"
-                  image={bike.imageUrl || 'https://via.placeholder.com/345x194?text=Bicicleta'}
-                  alt={bike.name}
-                  sx={{ objectFit: 'contain' }}
-                />
-                <CardContent sx={{ flexGrow: 1 }}>
-                  <Typography gutterBottom variant="h5" component="div">
-                    {bike.name}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Tipo: {bike.type} | Marca: {bike.brand}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Stock: {bike.stock}
-                  </Typography>
-                  <Typography variant="h6" color="primary" sx={{ mt: 2 }}>
-                    ${RENTAL_PRICE_PER_HOUR.toLocaleString('es-CL')} / Hora
-                  </Typography>
-                </CardContent>
-                <CardActions sx={{ justifyContent: 'center', pb: 2 }}>
-                  <Button
-                    size="small"
-                    variant="contained"
-                    onClick={() => handleOpenDialog(bike)}
-                    disabled={bike.stock === 0}
-                  >
-                    {bike.stock > 0 ? 'Arrendar' : 'Sin Stock'}
-                  </Button>
-                </CardActions>
-              </Card>
+              <BikeCard bike={bike} onRent={handleOpenDialog} />
             </Grid>
-          ))}
-        </Grid>
-      )}
+          ))
+        )}
+      </Grid>
 
       {/* Diálogo de Arriendo */}
-      <Dialog open={openDialog} onClose={handleCloseDialog} fullWidth maxWidth="sm">
-        <DialogTitle>
-          Arrendar {selectedBike?.name}
-        </DialogTitle>
+      <Dialog open={openDialog} onClose={handleCloseDialog}>
+        <DialogTitle>Arrendar {selectedBike?.name}</DialogTitle>
         <DialogContent>
-          {loadingRent && (
-            <Box sx={{ display: 'flex', justifyContent: 'center', my: 2 }}>
-              <CircularProgress />
-            </Box>
-          )}
+          <Typography variant="body1" sx={{ mb: 2 }}>
+            Precio por hora: ${selectedBike?.hourlyRate?.toLocaleString('es-CL') || 0}
+          </Typography>
+          
           <TextField
-            label="Nombre Completo"
-            fullWidth
             margin="dense"
+            label="Nombre Completo"
+            type="text"
+            fullWidth
+            variant="outlined"
             value={customerName}
             onChange={(e) => setCustomerName(e.target.value)}
+            required
             sx={{ mb: 2 }}
           />
           <TextField
-            label="Correo Electrónico"
-            fullWidth
             margin="dense"
+            label="Email de Contacto"
             type="email"
+            fullWidth
+            variant="outlined"
             value={customerEmail}
             onChange={(e) => setCustomerEmail(e.target.value)}
+            required
             sx={{ mb: 2 }}
           />
 
+          {/* DateTimePicker para la fecha de inicio y término */}
           <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
             <DateTimePicker
               label="Fecha y Hora de Inicio"
               value={startDate}
               onChange={setStartDate}
               renderInput={(params) => <TextField {...params} fullWidth sx={{ mb: 2 }} />}
+              minDate={new Date()} // No permitir seleccionar fechas pasadas
             />
             <DateTimePicker
               label="Fecha y Hora de Término"

@@ -18,8 +18,9 @@ import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
-// 1. Define la URL base de la API
-const API_URL_BASE = process.env.REACT_APP_URL;
+// 1. Define la URL base de la API (compatible con Vite)
+// Nota: En Vite, las variables de entorno se acceden con import.meta.env y deben empezar con VITE_
+const API_URL_BASE = import.meta.env.VITE_URL;
 
 // Recibe handleLogin como prop
 function EmployeeLoginPage({ handleLogin }) {
@@ -45,127 +46,90 @@ function EmployeeLoginPage({ handleLogin }) {
     setSnackbarOpen(false);
   };
 
-  // Función para manejar el inicio de sesión de empleados
+  const showSnackbar = (message, severity) => {
+    setSnackbarMessage(message);
+    setSnackbarSeverity(severity);
+    setSnackbarOpen(true);
+  };
+
+  // Manejar el login de empleado o administrador
   const handleLoginSubmit = async (event) => {
     event.preventDefault();
 
-    if (!email || !password) {
-      setSnackbarMessage('Por favor, ingresa tu correo y contraseña.');
-      setSnackbarSeverity('warning');
-      setSnackbarOpen(true);
-      return;
-    }
-
     try {
-      // 2. URL de inicio de sesión de empleados
-      const response = await axios.post(`${API_URL_BASE}/api/employees/login`, {
+      // Endpoint de login para empleados
+      const response = await axios.post(`${API_URL_BASE}/api/employee/login`, {
         email,
         password,
       });
 
-      console.log('Inicio de sesión de empleado exitoso:', response.data);
-      setSnackbarMessage(`Bienvenido, ${response.data.user.firstName}!`);
-      setSnackbarSeverity('success');
-      setSnackbarOpen(true);
+      const { token, user } = response.data;
+      
+      // Almacenar el token y el rol
+      localStorage.setItem('token', token);
+      localStorage.setItem('userRole', user.role);
 
-      // Aquí se maneja el login del empleado (usando el rol del backend si está disponible)
-      // Si el usuario es un administrador, activa el modo de registro de empleados
-      if (response.data.user.role === 'admin' && isAdminMode) {
+      // Si es un administrador y el modo admin está activado, permite el registro de nuevos empleados
+      if (user.role === 'admin' && isAdminMode) {
         setLoggedInAsAdmin(true);
-        // Limpiamos los campos de login después de un inicio de sesión exitoso como admin
-        setEmail('');
-        setPassword('');
+        showSnackbar('Acceso de Administrador confirmado. Puedes registrar nuevos empleados.', 'success');
+      } else if (user.role === 'admin' || user.role === 'employee') {
+        // Redirige a la página de inventario si el login es exitoso
+        navigate('/inventory'); 
+        showSnackbar('Inicio de sesión de empleado exitoso.', 'success');
       } else {
-        // Lógica de navegación para empleados normales o admins que no están en modo de registro
-        handleLogin(response.data.user.role); // 'employee' o 'admin'
-        setTimeout(() => {
-          // Asumimos que los empleados van a la página de inventario
-          navigate('/inventory'); 
-        }, 2000);
+        // En teoría, el endpoint de empleado solo debería retornar empleados/admins, pero por seguridad
+        showSnackbar('Acceso denegado. Rol de usuario no autorizado.', 'error');
+      }
+
+      // Llama a la función de manejo de login del componente App/Padre si existe
+      if (handleLogin) {
+        handleLogin(user.role);
       }
 
     } catch (error) {
-      console.error('Error durante el inicio de sesión:', error.response ? error.response.data : error.message);
-      setSnackbarMessage(error.response?.data?.message || 'Error de autenticación. Verifica tus credenciales.');
-      setSnackbarSeverity('error');
-      setSnackbarOpen(true);
+      console.error('Error durante el inicio de sesión de empleado:', error.response ? error.response.data : error.message);
+      showSnackbar('Error de autenticación. Verifica tu correo y contraseña.', 'error');
     }
   };
 
-  // Función para manejar el inicio de sesión de administrador para permitir el registro de empleados
-  const handleAdminRegisterSubmit = async (event) => {
+  // Manejar el registro de nuevos empleados (solo accesible si se ha logueado como admin y activado el modo admin)
+  const handleRegisterEmployee = async (event) => {
     event.preventDefault();
 
-    if (!email || !password) {
-      setSnackbarMessage('Por favor, ingresa tu correo y contraseña.');
-      setSnackbarSeverity('warning');
-      setSnackbarOpen(true);
+    if (!loggedInAsAdmin) {
+      showSnackbar('Solo los administradores pueden registrar nuevos empleados.', 'error');
+      return;
+    }
+
+    // Validar que el email termine en @masterbike.cl
+    if (!newEmployeeEmail.endsWith('@masterbike.cl')) {
+      showSnackbar('El correo debe terminar en @masterbike.cl para registrarse como empleado.', 'error');
       return;
     }
 
     try {
-      // 3. URL de inicio de sesión de administrador (para registro de empleados)
-      const response = await axios.post(`${API_URL_BASE}/api/employees/admin-register`, {
-        email,
-        password,
-      });
-
-      // Si el login de administrador es exitoso, permite el registro de nuevos empleados
-      if (response.data.isAdmin) {
-        setLoggedInAsAdmin(true);
-        setSnackbarMessage('Inicio de sesión de administrador exitoso. Puedes registrar nuevos empleados.');
-        setSnackbarSeverity('success');
-      } else {
-        setSnackbarMessage('No autorizado. Solo los administradores pueden registrar empleados.');
-        setSnackbarSeverity('error');
-      }
-      setSnackbarOpen(true);
-
-    } catch (error) {
-      console.error('Error durante el inicio de sesión de administrador:', error.response ? error.response.data : error.message);
-      setSnackbarMessage(error.response?.data?.message || 'Error de autenticación de administrador.');
-      setSnackbarSeverity('error');
-      setSnackbarOpen(true);
-    }
-  };
-
-  // Función para registrar un nuevo empleado (solo accesible si loggedInAsAdmin es true)
-  const handleNewEmployeeSubmit = async (event) => {
-    event.preventDefault();
-
-    if (!newEmployeeFirstName || !newEmployeeLastName || !newEmployeeEmail || !newEmployeePassword) {
-      setSnackbarMessage('Por favor, completa todos los campos para el nuevo empleado.');
-      setSnackbarSeverity('warning');
-      setSnackbarOpen(true);
-      return;
-    }
-
-    try {
-      // 4. URL de registro de empleados
-      const response = await axios.post(`${API_URL_BASE}/api/employees/register`, {
+      // Envía los datos de registro al backend
+      const response = await axios.post(`${API_URL_BASE}/api/register`, {
         firstName: newEmployeeFirstName,
         lastName: newEmployeeLastName,
         email: newEmployeeEmail,
         password: newEmployeePassword,
-        role: 'employee' // Por defecto, se registra como 'employee'
+        role: 'employee', // Asegura que el rol sea 'employee'
       });
 
-      console.log('Registro de nuevo empleado exitoso:', response.data);
-      setSnackbarMessage('Nuevo empleado registrado con éxito.');
-      setSnackbarSeverity('success');
-      setSnackbarOpen(true);
-
-      // Limpiar campos del formulario después del registro
+      console.log('Registro de empleado exitoso:', response.data);
+      showSnackbar('Empleado registrado exitosamente.', 'success');
+      
+      // Limpia el formulario de registro después de éxito
       setNewEmployeeFirstName('');
       setNewEmployeeLastName('');
       setNewEmployeeEmail('');
       setNewEmployeePassword('');
 
     } catch (error) {
-      console.error('Error al registrar nuevo empleado:', error.response ? error.response.data : error.message);
-      setSnackbarMessage(error.response?.data?.message || 'Error al registrar el empleado. Asegúrate de que el correo no esté en uso.');
-      setSnackbarSeverity('error');
-      setSnackbarOpen(true);
+      console.error('Error durante el registro de empleado:', error.response ? error.response.data : error.message);
+      showSnackbar(error.response?.data?.message || 'Error al registrar el empleado. Intenta de nuevo.', 'error');
     }
   };
 
@@ -183,22 +147,26 @@ function EmployeeLoginPage({ handleLogin }) {
           bgcolor: 'background.paper',
         }}
       >
-        <Avatar sx={{ m: 1, bgcolor: 'primary.main' }}>
+        <Avatar sx={{ m: 1, bgcolor: 'secondary.main' }}>
           {loggedInAsAdmin ? <PersonAddIcon /> : <LockOutlinedIcon />}
         </Avatar>
         <Typography component="h1" variant="h5">
-          {loggedInAsAdmin ? 'Registrar Nuevo Empleado' : 'Login de Empleados'}
+          {loggedInAsAdmin ? 'Registrar Empleado' : 'Inicio de Sesión (Empleado/Admin)'}
         </Typography>
 
-        {/* Formulario de Login de Empleado/Admin */}
         {!loggedInAsAdmin && (
           <Box component="form" onSubmit={handleLoginSubmit} noValidate sx={{ mt: 1 }}>
             <FormControlLabel
-              control={<Switch checked={isAdminMode} onChange={(e) => setIsAdminMode(e.target.checked)} />}
-              label="Modo Administrador (Registrar Empleado)"
+              control={
+                <Switch
+                  checked={isAdminMode}
+                  onChange={(e) => setIsAdminMode(e.target.checked)}
+                  color="primary"
+                />
+              }
+              label="Modo Administrador (Para registro)"
               sx={{ mb: 2 }}
             />
-            
             <TextField
               margin="normal"
               required
@@ -223,30 +191,28 @@ function EmployeeLoginPage({ handleLogin }) {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
+            
             <Button
               type="submit"
               fullWidth
               variant="contained"
               sx={{ mt: 3, mb: 2 }}
             >
-              {isAdminMode ? 'Login de Admin para Registrar' : 'Iniciar Sesión'}
+              Iniciar Sesión
             </Button>
-            <Grid container>
-              <Grid item xs>
+            <Grid container justifyContent="flex-end">
+              <Grid item>
                 <MuiLink component={Link} to="/login" variant="body2">
-                  Volver al Login de Clientes
+                  Volver al Login de Cliente
                 </MuiLink>
               </Grid>
             </Grid>
           </Box>
         )}
 
-        {/* Formulario de Registro de Nuevo Empleado (solo para Admin Logeado) */}
+        {/* Formulario de registro de empleado (solo visible si loggedInAsAdmin es true) */}
         {loggedInAsAdmin && (
-          <Box component="form" onSubmit={handleNewEmployeeSubmit} noValidate sx={{ mt: 3 }}>
-            <Typography variant="h6" gutterBottom>
-              Datos del Nuevo Empleado
-            </Typography>
+          <Box component="form" onSubmit={handleRegisterEmployee} noValidate sx={{ mt: 3 }}>
             <TextField
               margin="normal"
               required

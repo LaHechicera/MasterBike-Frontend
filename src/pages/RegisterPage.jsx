@@ -15,7 +15,8 @@ import HowToRegOutlinedIcon from '@mui/icons-material/HowToRegOutlined';
 import { Link, useNavigate } from 'react-router-dom'; // Importa useNavigate para redirección
 import axios from 'axios'; // Importa axios para las peticiones HTTP
 
-const API_URL_BASE = process.env.REACT_APP_URL;
+// Nota: En Vite, las variables de entorno se acceden con import.meta.env y deben empezar con VITE_
+const API_URL_BASE = import.meta.env.VITE_URL;
 
 function RegisterPage() {
   const [firstName, setFirstName] = useState('');
@@ -46,7 +47,7 @@ function RegisterPage() {
     }
 
     try {
-      // Envía los datos de registro al backend
+      // Envía los datos de registro al backend usando la variable de entorno de Vite
       const response = await axios.post(`${API_URL_BASE}/api/register`, {
         firstName,
         lastName,

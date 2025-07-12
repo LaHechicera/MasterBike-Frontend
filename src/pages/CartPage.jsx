@@ -36,8 +36,9 @@ import es from 'date-fns/locale/es';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
-// 1. Define la URL base de la API
-const API_URL_BASE = process.env.REACT_APP_URL;
+// 1. Define la URL base de la API (compatible con Vite)
+// Nota: En Vite, las variables de entorno se acceden con import.meta.env y deben empezar con VITE_
+const API_URL_BASE = import.meta.env.VITE_URL;
 
 // 2. Define la URL de tu backend para procesar la compra
 const API_URL_PURCHASE = `${API_URL_BASE}/api/purchase`;
@@ -46,117 +47,37 @@ function CartPage({ cart, updateItemQuantity, removeItemFromCart, clearCart }) {
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const [snackbarSeverity, setSnackbarSeverity] = useState('success');
-  const [loadingPurchase, setLoadingPurchase] = useState(false);
   const [openPurchaseDialog, setOpenPurchaseDialog] = useState(false);
+  const [loadingPurchase, setLoadingPurchase] = useState(false);
   
-  // Datos del cliente para la compra
+  // Estados para la información del cliente
   const [customerName, setCustomerName] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
-  const [customerAddress, setCustomerAddress] = useState(''); // Añadido para la dirección de despacho
-  const [deliveryDate, setDeliveryDate] = useState(null); // Para la fecha de despacho
+  const [customerAddress, setCustomerAddress] = useState('');
+  const [deliveryDate, setDeliveryDate] = useState(null);
 
-  // ... (Funciones de manejo de cantidad y eliminación de items) ...
+  // Manejador para la cantidad de productos
+  const handleQuantityChange = (id, newQuantity, maxStock) => {
+    if (newQuantity >= 1 && newQuantity <= maxStock) {
+      updateItemQuantity(id, newQuantity);
+    } else if (newQuantity > maxStock) {
+      showSnackbar(`No hay suficiente stock para ${newQuantity} unidades.`, 'warning');
+    }
+  };
 
+  // Calcula el subtotal del carrito
   const calculateSubtotal = () => {
-    return cart.reduce((total, item) => total + item.price * item.quantity, 0);
+    return cart.reduce((total, item) => total + (item.price * item.quantity), 0);
   };
 
-  // Función para manejar la confirmación de la compra
-  const handleConfirmPurchase = async () => {
-    // Validar datos de cliente y fecha de despacho
-    if (!customerName || !customerEmail || !customerAddress || !deliveryDate) {
-      setSnackbarMessage('Por favor, completa todos los datos de contacto y selecciona una fecha de despacho.');
-      setSnackbarSeverity('warning');
-      setSnackbarOpen(true);
-      return;
-    }
-
-    // Preparar los datos de la compra
-    const purchaseData = {
-      items: cart.map(item => ({
-        itemId: item._id, // Usamos _id del inventario
-        quantity: item.quantity,
-        price: item.price,
-        name: item.name
-      })),
-      totalAmount: calculateSubtotal(),
-      customerName,
-      customerEmail,
-      customerAddress,
-      deliveryDate: format(deliveryDate, 'yyyy-MM-dd')
-    };
-
-    setLoadingPurchase(true);
-
-    try {
-      // Usa la URL de compra actualizada
-      const response = await axios.post(API_URL_PURCHASE, purchaseData);
-
-      console.log('Compra exitosa:', response.data);
-      setSnackbarMessage('¡Compra realizada con éxito! Recibirás un correo de confirmación.');
-      setSnackbarSeverity('success');
-      setSnackbarOpen(true);
-      
-      // Simula la creación del PDF de la boleta
-      createInvoicePDF(response.data.purchase);
-      
-      // Limpiar el carrito y cerrar el diálogo después de la compra
-      clearCart();
-      setOpenPurchaseDialog(false);
-      
-    } catch (error) {
-      console.error('Error al procesar la compra:', error.response ? error.response.data : error.message);
-      setSnackbarMessage(error.response?.data?.message || 'Error al procesar la compra. Verifica el stock disponible.');
-      setSnackbarSeverity('error');
-      
-    } finally {
-      setLoadingPurchase(false);
-    }
+  // Mostrar Snackbar
+  const showSnackbar = (message, severity) => {
+    setSnackbarMessage(message);
+    setSnackbarSeverity(severity);
+    setSnackbarOpen(true);
   };
 
-  // ... (Resto del código, incluyendo createInvoicePDF, shouldDisableDate, etc.) ...
-  
-  // Función para generar el PDF de la boleta
-  const createInvoicePDF = (purchaseDetails) => {
-    // Código para generar el PDF usando jsPDF y html2canvas
-    const invoiceContent = document.createElement('div');
-    invoiceContent.style.padding = '20px';
-    invoiceContent.style.backgroundColor = '#fff';
-    invoiceContent.style.fontFamily = 'Arial, sans-serif';
-    
-    // ... (Estructura HTML de la boleta) ...
-    
-    html2canvas(invoiceContent, { scale: 2 }).then(canvas => {
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const imgWidth = 210;
-      const pageHeight = 297;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      let heightLeft = imgHeight;
-      let position = 0;
-      
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
-      
-      while (heightLeft >= 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
-      }
-      
-      pdf.save(`Boleta_${purchaseDetails._id}.pdf`);
-    });
-  };
-
-  const shouldDisableDate = (date) => {
-    // Deshabilitar fines de semana y fechas pasadas
-    const today = new Date();
-    return isWeekend(date) || isPast(date) && !isSameDay(date, today);
-  };
-
-  const isSameDay = (d1, d2) => d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
-
+  // Manejar el cierre del Snackbar
   const handleSnackbarClose = (event, reason) => {
     if (reason === 'clickaway') {
       return;
@@ -164,119 +85,252 @@ function CartPage({ cart, updateItemQuantity, removeItemFromCart, clearCart }) {
     setSnackbarOpen(false);
   };
 
+  // Abrir el diálogo de compra
   const handleOpenPurchaseDialog = () => {
+    if (cart.length === 0) {
+      showSnackbar('El carrito está vacío. Agrega productos para continuar.', 'warning');
+      return;
+    }
     setOpenPurchaseDialog(true);
   };
 
+  // Cerrar el diálogo de compra
   const handleClosePurchaseDialog = () => {
     setOpenPurchaseDialog(false);
-    // Reiniciar los campos del formulario de compra
-    setCustomerName('');
-    setCustomerEmail('');
-    setCustomerAddress('');
-    setDeliveryDate(null);
+    setLoadingPurchase(false);
   };
-  
+
+  // Generar PDF de confirmación de compra
+  const generatePurchasePDF = (purchaseDetails) => {
+    const doc = new jsPDF();
+
+    // Título
+    doc.setFontSize(22);
+    doc.text('Confirmación de Compra - MasterBike', 10, 20);
+
+    // Detalles del Cliente
+    doc.setFontSize(16);
+    doc.text('Detalles del Cliente', 10, 40);
+    doc.setFontSize(12);
+    doc.text(`Nombre: ${purchaseDetails.customerName}`, 10, 50);
+    doc.text(`Email: ${purchaseDetails.customerEmail}`, 10, 57);
+    doc.text(`Dirección de Despacho: ${purchaseDetails.customerAddress}`, 10, 64);
+    doc.text(`Fecha de Despacho Sugerida: ${purchaseDetails.deliveryDate}`, 10, 71);
+
+    // Detalles de la Compra
+    doc.setFontSize(16);
+    doc.text('Productos Comprados', 10, 85);
+    doc.setFontSize(12);
+    let y = 95;
+    purchaseDetails.items.forEach(item => {
+      doc.text(`${item.quantity}x ${item.name} ($${item.price.toLocaleString('es-CL')}) - Total: $${(item.quantity * item.price).toLocaleString('es-CL')}`, 10, y);
+      y += 7;
+    });
+
+    // Total
+    doc.setFontSize(16);
+    doc.text(`Total Pagado: $${purchaseDetails.totalAmount.toLocaleString('es-CL')}`, 10, y + 10);
+
+    // Nota
+    doc.setFontSize(10);
+    doc.text('Gracias por tu compra en MasterBike. Te contactaremos para coordinar el despacho.', 10, y + 30);
+
+    doc.save(`Confirmacion_Compra_${Date.now()}.pdf`);
+  };
+
+  // Confirmar compra y procesar el pago (simulado)
+  const handleConfirmPurchase = async () => {
+    setLoadingPurchase(true);
+
+    const purchaseDetails = {
+      customerName,
+      customerEmail,
+      customerAddress,
+      deliveryDate: deliveryDate ? format(deliveryDate, 'dd/MM/yyyy') : null,
+      items: cart.map(item => ({
+        id: item._id, // Usamos _id de MongoDB
+        name: item.name,
+        price: item.price,
+        quantity: item.quantity,
+        category: item.category
+      })),
+      totalAmount: calculateSubtotal(),
+      // Aquí podrías agregar el método de pago si fuera real
+    };
+
+    try {
+      // Envía los detalles de la compra al backend
+      const response = await axios.post(API_URL_PURCHASE, purchaseDetails);
+      
+      console.log('Compra procesada exitosamente:', response.data);
+      
+      // Generar PDF y descargar
+      generatePurchasePDF(purchaseDetails);
+
+      // Limpiar el carrito y cerrar el diálogo
+      clearCart();
+      handleClosePurchaseDialog();
+      showSnackbar('¡Compra realizada con éxito! Tu confirmación se ha descargado en PDF.', 'success');
+
+      // Limpiar estados del formulario
+      setCustomerName('');
+      setCustomerEmail('');
+      setCustomerAddress('');
+      setDeliveryDate(null);
+
+    } catch (error) {
+      console.error('Error al procesar la compra:', error.response ? error.response.data : error.message);
+      handleClosePurchaseDialog();
+      showSnackbar('Hubo un error al procesar la compra. Intenta de nuevo.', 'error');
+    }
+  };
+
+  // Lógica para deshabilitar fines de semana y días pasados en el DatePicker
+  const shouldDisableDate = (date) => {
+    return isWeekend(date) || isPast(date);
+  };
+
+  // Manejar el cambio de fecha de despacho
   const handleDeliveryDateChange = (date) => {
-    setDeliveryDate(date);
+    // Asegurarse de que la fecha seleccionada sea un objeto Date válido antes de establecerla
+    if (date instanceof Date && !isNaN(date)) {
+      setDeliveryDate(date);
+    } else {
+      setDeliveryDate(null);
+    }
   };
 
   return (
     <Container sx={{ mt: 4, mb: 4 }}>
-      <Typography variant="h3" component="h1" gutterBottom sx={{ textAlign: 'center' }}>
+      <Typography variant="h4" component="h1" gutterBottom>
         Carrito de Compras
       </Typography>
+      <Divider sx={{ mb: 3 }} />
 
       {cart.length === 0 ? (
-        <Alert severity="info" sx={{ mt: 3 }}>
+        <Alert severity="info" sx={{ mt: 4 }}>
           Tu carrito está vacío.
         </Alert>
       ) : (
-        <Grid container spacing={3}>
-          <Grid item xs={12} md={8}>
-            <List component={Paper} elevation={3}>
-              {cart.map((item) => (
-                <ListItem key={item._id} sx={{ py: 2, px: 3, '&:not(:last-child)': { borderBottom: '1px solid #e0e0e0' } }}>
+        <Paper elevation={3} sx={{ p: 3 }}>
+          <List>
+            {cart.map((item) => (
+              <ListItem
+                key={item._id}
+                secondaryAction={
+                  <IconButton edge="end" aria-label="delete" onClick={() => removeItemFromCart(item._id)}>
+                    <DeleteIcon />
+                  </IconButton>
+                }
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                  <img 
+                    src={item.imageUrl} 
+                    alt={item.name} 
+                    style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: '4px', marginRight: 16 }}
+                  />
                   <ListItemText
-                    primary={<Typography variant="h6">{item.name}</Typography>}
-                    secondary={`Cantidad: ${item.quantity} | Precio Unitario: $${item.price.toLocaleString('es-CL')}`}
+                    primary={item.name}
+                    secondary={`$${item.price.toLocaleString('es-CL')} c/u`}
+                    sx={{ flexGrow: 1 }}
                   />
                   <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    <IconButton onClick={() => updateItemQuantity(item._id, item.quantity - 1)} disabled={item.quantity <= 1}>
+                    <IconButton 
+                      size="small" 
+                      onClick={() => handleQuantityChange(item._id, item.quantity - 1, item.stock)}
+                      disabled={item.quantity <= 1}
+                    >
                       <RemoveIcon />
                     </IconButton>
-                    <Typography sx={{ mx: 1 }}>{item.quantity}</Typography>
-                    <IconButton onClick={() => updateItemQuantity(item._id, item.quantity + 1)} disabled={item.quantity >= item.stock}>
+                    <TextField
+                      variant="outlined"
+                      size="small"
+                      value={item.quantity}
+                      onChange={(e) => {
+                        const value = parseInt(e.target.value, 10);
+                        handleQuantityChange(item._id, value || 0, item.stock);
+                      }}
+                      inputProps={{ 
+                        style: { textAlign: 'center' },
+                        min: 1,
+                        max: item.stock
+                      }}
+                      sx={{ width: 60, mx: 1 }}
+                    />
+                    <IconButton 
+                      size="small" 
+                      onClick={() => handleQuantityChange(item._id, item.quantity + 1, item.stock)}
+                      disabled={item.quantity >= item.stock}
+                    >
                       <AddIcon />
                     </IconButton>
-                    <IconButton edge="end" onClick={() => removeItemFromCart(item._id)} color="error" sx={{ ml: 2 }}>
-                      <DeleteIcon />
-                    </IconButton>
                   </Box>
-                </ListItem>
-              ))}
-            </List>
-          </Grid>
+                  <Typography variant="body1" sx={{ ml: 4, minWidth: 100, textAlign: 'right' }}>
+                    Total: ${(item.price * item.quantity).toLocaleString('es-CL')}
+                  </Typography>
+                </Box>
+              </ListItem>
+            ))}
+          </List>
+          
+          <Divider sx={{ my: 2 }} />
 
-          <Grid item xs={12} md={4}>
-            <Paper elevation={3} sx={{ p: 3 }}>
-              <Typography variant="h5" gutterBottom>
-                Resumen de Compra
-              </Typography>
-              <Divider sx={{ my: 2 }} />
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-                <Typography variant="h6">Subtotal:</Typography>
-                <Typography variant="h6" color="primary">
-                  ${calculateSubtotal().toLocaleString('es-CL')}
-                </Typography>
-              </Box>
-              <Button
-                variant="contained"
-                fullWidth
-                onClick={handleOpenPurchaseDialog}
-                sx={{ mt: 2, py: 1.5 }}
-              >
-                Proceder a la Compra
-              </Button>
-            </Paper>
-          </Grid>
-        </Grid>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 3 }}>
+            <Typography variant="h5" component="span" sx={{ fontWeight: 'bold' }}>
+              Total: ${calculateSubtotal().toLocaleString('es-CL')}
+            </Typography>
+            <Button 
+              variant="contained" 
+              color="primary" 
+              onClick={handleOpenPurchaseDialog}
+            >
+              Comprar
+            </Button>
+          </Box>
+        </Paper>
       )}
 
-      {/* Diálogo de Confirmación de Compra */}
-      <Dialog open={openPurchaseDialog} onClose={handleClosePurchaseDialog} fullWidth maxWidth="sm">
-        <DialogTitle>Datos para el Despacho</DialogTitle>
+      {/* Diálogo de Información de Compra */}
+      <Dialog open={openPurchaseDialog} onClose={handleClosePurchaseDialog}>
+        <DialogTitle>Confirmar Compra</DialogTitle>
         <DialogContent>
-          {loadingPurchase && (
-            <Box sx={{ display: 'flex', justifyContent: 'center', my: 2 }}>
-              <CircularProgress />
-            </Box>
-          )}
+          <Typography variant="body1" sx={{ mb: 2 }}>
+            Por favor, ingresa tus datos para el despacho.
+          </Typography>
+          
           <TextField
+            autoFocus
+            margin="dense"
             label="Nombre Completo"
+            type="text"
             fullWidth
-            margin="normal"
+            variant="outlined"
             value={customerName}
             onChange={(e) => setCustomerName(e.target.value)}
             sx={{ mb: 2 }}
           />
           <TextField
-            label="Correo Electrónico"
-            fullWidth
-            margin="normal"
+            margin="dense"
+            label="Email de Contacto"
             type="email"
+            fullWidth
+            variant="outlined"
             value={customerEmail}
             onChange={(e) => setCustomerEmail(e.target.value)}
             sx={{ mb: 2 }}
           />
           <TextField
+            margin="dense"
             label="Dirección de Despacho"
+            type="text"
             fullWidth
-            margin="normal"
+            variant="outlined"
             value={customerAddress}
             onChange={(e) => setCustomerAddress(e.target.value)}
             sx={{ mb: 2 }}
           />
+
+          {/* DatePicker para la fecha de despacho */}
           <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
             <DatePicker
               label="Fecha de Despacho Sugerida (Días hábiles)"

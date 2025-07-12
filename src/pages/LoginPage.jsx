@@ -16,7 +16,8 @@ import WorkIcon from '@mui/icons-material/Work'; // Importa un icono de trabajo 
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
-const API_URL_BASE = process.env.REACT_APP_URL;
+// Nota: En Vite, las variables de entorno se acceden con import.meta.env y deben empezar con VITE_
+const API_URL_BASE = import.meta.env.VITE_URL;
 
 // Recibe handleLogin como prop
 function LoginPage({ handleLogin }) {
@@ -38,26 +39,40 @@ function LoginPage({ handleLogin }) {
     }
 
     try {
+      // Usa API_URL_BASE para construir la URL del endpoint de login
       const response = await axios.post(`${API_URL_BASE}/api/login`, {
         email,
         password,
       });
 
       console.log('Inicio de sesión exitoso:', response.data);
-      setSnackbarMessage(`¡Bienvenido, ${response.data.user.firstName}!`);
+
+      // Manejo de roles y token de autenticación
+      const { token, user } = response.data;
+      if (handleLogin) {
+        handleLogin(user.role);
+      }
+
+      // Almacenar el token en localStorage o cookies (recomendado: localStorage para simplificar)
+      localStorage.setItem('token', token);
+      localStorage.setItem('userRole', user.role);
+
+      setSnackbarMessage('¡Inicio de sesión exitoso!');
       setSnackbarSeverity('success');
       setSnackbarOpen(true);
 
-      // Llama a handleLogin de App.jsx para actualizar el estado global
-      handleLogin('client'); // Asigna el rol 'client' para usuarios normales
-
+      // Redirigir al usuario según su rol
       setTimeout(() => {
-        navigate('/');
-      }, 2000);
+        if (user.role === 'admin' || user.role === 'employee') {
+          navigate('/inventory'); // Redirige a empleados/admins a la página de inventario
+        } else {
+          navigate('/'); // Redirige a clientes a la página principal
+        }
+      }, 1000);
 
     } catch (error) {
       console.error('Error durante el inicio de sesión:', error.response ? error.response.data : error.message);
-      setSnackbarMessage(error.response?.data?.message || 'Error al iniciar sesión. Verifica tus credenciales.');
+      setSnackbarMessage('Correo o contraseña incorrectos. Intenta de nuevo.');
       setSnackbarSeverity('error');
       setSnackbarOpen(true);
     }
@@ -88,7 +103,7 @@ function LoginPage({ handleLogin }) {
           <LockOutlinedIcon />
         </Avatar>
         <Typography component="h1" variant="h5">
-          Iniciar Sesión
+          Iniciar Sesión (Cliente)
         </Typography>
         <Box component="form" onSubmit={handleSubmit} noValidate sx={{ mt: 1 }}>
           <TextField
@@ -115,6 +130,7 @@ function LoginPage({ handleLogin }) {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
+          
           <Button
             type="submit"
             fullWidth
@@ -125,9 +141,10 @@ function LoginPage({ handleLogin }) {
           </Button>
           <Grid container>
             <Grid item xs>
-              <MuiLink href="#" variant="body2">
+              {/* Opción de recuperar contraseña (opcional) */}
+              {/* <MuiLink href="#" variant="body2">
                 ¿Olvidaste tu contraseña?
-              </MuiLink>
+              </MuiLink> */}
             </Grid>
             <Grid item>
               <MuiLink component={Link} to="/register" variant="body2">

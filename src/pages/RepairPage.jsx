@@ -32,7 +32,7 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
 // URL base de tu backend para las reparaciones
-const API_URL_BASE = process.env.REACT_APP_URL; 
+const API_URL_BASE = import.meta.env.VITE_URL;
 const API_URL_REPAIRS = `${API_URL_BASE}/api/repairs`;
 
 const repairSteps = ['Detalles de la Bicicleta', 'Descripción del Problema', 'Información de Contacto', 'Confirmación'];
