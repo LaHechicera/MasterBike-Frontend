@@ -43,14 +43,18 @@ function App() {
   useEffect(() => {
     try {
       const storedIsLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
-      const storedUserRole = localStorage.getItem('userRole'); // Obtén el valor, puede ser 'null' como string si se guardó así
+      const storedUserRole = localStorage.getItem('userRole'); // Obtén el valor como string
+
+      let parsedUserRole = null;
+      // Si storedUserRole tiene un valor y no es la cadena "null" o "undefined"
+      if (storedUserRole && storedUserRole !== 'null' && storedUserRole !== 'undefined') {
+        parsedUserRole = storedUserRole; // Usa el valor de la cadena
+      }
 
       // Si hay un estado de login guardado, úsalo
       if (storedIsLoggedIn) {
         setIsLoggedIn(storedIsLoggedIn);
-        // Aquí es donde ajustamos: si storedUserRole es 'null' (string), lo convertimos a null (valor JS)
-        // De lo contrario, usamos el valor tal cual.
-        setUserRole(storedUserRole === 'null' ? null : storedUserRole);
+        setUserRole(parsedUserRole); // Usa el valor parseado
       } else {
         // Si no está logueado, asegúrate de que el estado sea consistente
         setIsLoggedIn(false);
@@ -149,6 +153,7 @@ function App() {
                 definido en MuiAppBar.styleOverrides, que es darkAccent.main */}
             {!isLoggedIn && (
               <>
+                {console.log('Rendering public navigation buttons')}
                 <Button color="inherit" component={Link} to="/">Venta</Button>
                 <Button color="inherit" component={Link} to="/rent">Arriendo</Button>
                 <Button color="inherit" component={Link} to="/repair">Reparación</Button>
@@ -164,6 +169,7 @@ function App() {
 
             {isLoggedIn && (userRole === 'employee' || userRole === 'admin') && (
               <>
+                {console.log('Rendering employee/admin navigation buttons')}
                 <Button color="inherit" component={Link} to="/">Venta</Button>
                 <Button color="inherit" component={Link} to="/inventory">Inventario</Button>
                 <Button color="inherit" component={Link} to="/repair">Reparación</Button>
@@ -173,6 +179,7 @@ function App() {
 
             {isLoggedIn && userRole === 'client' && (
               <>
+                {console.log('Rendering client navigation buttons')}
                 <Button color="inherit" component={Link} to="/">Venta</Button>
                 <Button color="inherit" component={Link} to="/rent">Arriendo</Button>
                 <Button color="inherit" component={Link} to="/repair">Reparación</Button>
