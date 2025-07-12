@@ -15,16 +15,19 @@ WORKDIR /app
 COPY package*.json ./
 
 # Instala las dependencias de Node.js
-# `--omit=dev` es opcional, si quieres un tamaño de imagen final aún más pequeño
-# y estás seguro de que las dependencias de desarrollo no son necesarias en el entorno de build.
 RUN npm install
 
 # Copia el código fuente completo del proyecto al contenedor
 COPY . .
 
+# DECLARA VITE_API_URL COMO UN ARGUMENTO DE CONSTRUCCIÓN
+# Render pasará las variables de entorno configuradas en el dashboard como ARGs al Docker build.
+ARG VITE_API_URL
+
 # Construye la aplicación de React.
-# Para Vite, 'npm run build' genera por defecto los archivos estáticos en la carpeta 'dist/'.
-RUN npm run build
+# PASA EXPLÍCITAMENTE VITE_API_URL AL COMANDO DE CONSTRUCCIÓN DE VITE.
+# Esto asegura que Vite reemplace 'import.meta.env.VITE_API_URL' con el valor correcto.
+RUN VITE_API_URL=${VITE_API_URL} npm run build
 
 # ----------------------------------------
 # Etapa 2: Servir (Serve)
