@@ -27,7 +27,6 @@ import EmployeeLoginPage from './pages/EmployeeLoginPage';
 
 
 function App() {
-  // ... (Toda tu lógica de estado y funciones no cambia)
   const [cart, setCart] = useState(() => {
     try {
       const savedCart = localStorage.getItem('bikeShopCart');
@@ -39,20 +38,35 @@ function App() {
   });
 
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userRole, setUserRole] = useState(null);
+  const [userRole, setUserRole] = useState(null); // Inicializa userRole como null
 
   useEffect(() => {
     try {
       const storedIsLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
-      const storedUserRole = localStorage.getItem('userRole');
-      if (storedIsLoggedIn && storedUserRole) {
+      const storedUserRole = localStorage.getItem('userRole'); // Obtén el valor, puede ser 'null' como string si se guardó así
+
+      // Si hay un estado de login guardado, úsalo
+      if (storedIsLoggedIn) {
         setIsLoggedIn(storedIsLoggedIn);
-        setUserRole(storedUserRole);
+        // Aquí es donde ajustamos: si storedUserRole es 'null' (string), lo convertimos a null (valor JS)
+        // De lo contrario, usamos el valor tal cual.
+        setUserRole(storedUserRole === 'null' ? null : storedUserRole);
+      } else {
+        // Si no está logueado, asegúrate de que el estado sea consistente
+        setIsLoggedIn(false);
+        setUserRole(null);
       }
     } catch (error) {
       console.error("Error al cargar el estado de autenticación de localStorage:", error);
+      // En caso de error, asegúrate de que el estado por defecto sea no logueado
+      setIsLoggedIn(false);
+      setUserRole(null);
     }
   }, []);
+
+  // CONSOLE.LOGS PARA DEPURACIÓN (Mantenlos si sigues depurando)
+  console.log('Estado actual de App - isLoggedIn:', isLoggedIn, 'userRole:', userRole);
+
 
   const handleLogin = (role) => {
     setIsLoggedIn(true);
@@ -115,19 +129,15 @@ function App() {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <Router>
-        {/*
-          CAMBIO FINAL: AppBar está limpio.
-          Heredará todo desde la configuración de 'components' en el tema.
-        */}
-      <AppBar
-  position="static"
-  color="transparent"
-  sx={{
-    backgroundColor: '#7E8C54 !important',
-    color: '#332C0F !important',
-    boxShadow: 'none !important',
-  }}
->
+        <AppBar
+          position="static"
+          color="transparent"
+          sx={{
+            backgroundColor: '#7E8C54 !important',
+            color: '#332C0F !important',
+            boxShadow: 'none !important',
+          }}
+        >
           <Toolbar>
             <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
               <Link to="/" style={{ color: 'inherit', textDecoration: 'none' }}>
