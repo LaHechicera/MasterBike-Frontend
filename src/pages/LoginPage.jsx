@@ -12,12 +12,12 @@ import {
   Snackbar
 } from '@mui/material';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
-import WorkIcon from '@mui/icons-material/Work'; // Importa un icono de trabajo para empleados
+import WorkIcon from '@mui/icons-material/Work';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
-// Nota: En Vite, las variables de entorno se acceden con import.meta.env y deben empezar con VITE_
-const API_URL_BASE = import.meta.env.VITE_URL;
+// 1. Define la URL base de la API compatible con Vite
+const API_URL_BASE = import.meta.env.VITE_URL; 
 
 // Recibe handleLogin como prop
 function LoginPage({ handleLogin }) {
@@ -39,40 +39,26 @@ function LoginPage({ handleLogin }) {
     }
 
     try {
-      // Usa API_URL_BASE para construir la URL del endpoint de login
-      const response = await axios.post(`${API_URL_BASE}/api/login`, {
+      // Usa la URL base definida para la petición de login
+      const response = await axios.post(`${API_URL_BASE}/api/login`, { 
         email,
         password,
       });
 
       console.log('Inicio de sesión exitoso:', response.data);
-
-      // Manejo de roles y token de autenticación
-      const { token, user } = response.data;
-      if (handleLogin) {
-        handleLogin(user.role);
-      }
-
-      // Almacenar el token en localStorage o cookies (recomendado: localStorage para simplificar)
-      localStorage.setItem('token', token);
-      localStorage.setItem('userRole', user.role);
-
-      setSnackbarMessage('¡Inicio de sesión exitoso!');
+      handleLogin(response.data.token, response.data.user);
+      
+      setSnackbarMessage('Inicio de sesión exitoso.');
       setSnackbarSeverity('success');
       setSnackbarOpen(true);
-
-      // Redirigir al usuario según su rol
-      setTimeout(() => {
-        if (user.role === 'admin' || user.role === 'employee') {
-          navigate('/inventory'); // Redirige a empleados/admins a la página de inventario
-        } else {
-          navigate('/'); // Redirige a clientes a la página principal
-        }
-      }, 1000);
+      
+      // Redireccionar al usuario a la página de inicio (HomePage) después de un inicio de sesión exitoso
+      navigate('/');
 
     } catch (error) {
       console.error('Error durante el inicio de sesión:', error.response ? error.response.data : error.message);
-      setSnackbarMessage('Correo o contraseña incorrectos. Intenta de nuevo.');
+      const errorMessage = error.response?.data?.message || 'Error en el inicio de sesión.';
+      setSnackbarMessage(errorMessage);
       setSnackbarSeverity('error');
       setSnackbarOpen(true);
     }
@@ -93,17 +79,13 @@ function LoginPage({ handleLogin }) {
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          p: 3,
-          boxShadow: 3,
-          borderRadius: 2,
-          bgcolor: 'background.paper',
         }}
       >
         <Avatar sx={{ m: 1, bgcolor: 'secondary.main' }}>
           <LockOutlinedIcon />
         </Avatar>
         <Typography component="h1" variant="h5">
-          Iniciar Sesión (Cliente)
+          Iniciar Sesión
         </Typography>
         <Box component="form" onSubmit={handleSubmit} noValidate sx={{ mt: 1 }}>
           <TextField
@@ -130,7 +112,6 @@ function LoginPage({ handleLogin }) {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
-          
           <Button
             type="submit"
             fullWidth
@@ -141,10 +122,7 @@ function LoginPage({ handleLogin }) {
           </Button>
           <Grid container>
             <Grid item xs>
-              {/* Opción de recuperar contraseña (opcional) */}
-              {/* <MuiLink href="#" variant="body2">
-                ¿Olvidaste tu contraseña?
-              </MuiLink> */}
+              {/* Opción para recuperar contraseña si la tienes implementada */}
             </Grid>
             <Grid item>
               <MuiLink component={Link} to="/register" variant="body2">
@@ -157,18 +135,18 @@ function LoginPage({ handleLogin }) {
             <Button
               component={Link}
               to="/employee-login"
-              variant="outlined" // O "contained" para un botón más prominente
-              color="primary" // O "secondary" o un color personalizado
+              variant="outlined" 
+              color="primary"
               fullWidth
-              startIcon={<WorkIcon />} // Icono de trabajo
+              startIcon={<WorkIcon />} 
               sx={{
                 mt: 2,
-                py: 1.5, // Padding vertical
-                fontSize: '1rem', // Tamaño de fuente
-                fontWeight: 'bold', // Negrita
-                boxShadow: 3, // Sombra para un efecto 3D
+                py: 1.5, 
+                fontSize: '1rem',
+                fontWeight: 'bold',
+                boxShadow: 3,
                 '&:hover': {
-                  boxShadow: 6, // Sombra más grande al pasar el ratón
+                  boxShadow: 6,
                 },
               }}
             >
