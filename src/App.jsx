@@ -45,20 +45,27 @@ function App() {
       const storedIsLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
       const storedUserRole = localStorage.getItem('userRole'); // Obtén el valor como string
 
+      console.log('useEffect: Valor crudo de storedIsLoggedIn de localStorage:', localStorage.getItem('isLoggedIn'));
+      console.log('useEffect: Valor crudo de storedUserRole de localStorage:', storedUserRole);
+
       let parsedUserRole = null;
       // Si storedUserRole tiene un valor y no es la cadena "null" o "undefined"
       if (storedUserRole && storedUserRole !== 'null' && storedUserRole !== 'undefined') {
         parsedUserRole = storedUserRole; // Usa el valor de la cadena
       }
+      console.log('useEffect: parsedUserRole después del procesamiento:', parsedUserRole);
+
 
       // Si hay un estado de login guardado, úsalo
       if (storedIsLoggedIn) {
         setIsLoggedIn(storedIsLoggedIn);
         setUserRole(parsedUserRole); // Usa el valor parseado
+        console.log('useEffect: isLoggedIn es TRUE. userRole establecido a:', parsedUserRole);
       } else {
         // Si no está logueado, asegúrate de que el estado sea consistente
         setIsLoggedIn(false);
         setUserRole(null);
+        console.log('useEffect: isLoggedIn es FALSE. userRole establecido a NULL.');
       }
     } catch (error) {
       console.error("Error al cargar el estado de autenticación de localStorage:", error);
@@ -69,21 +76,25 @@ function App() {
   }, []);
 
   // CONSOLE.LOGS PARA DEPURACIÓN (Mantenlos si sigues depurando)
-  console.log('Estado actual de App - isLoggedIn:', isLoggedIn, 'userRole:', userRole);
+  console.log('Render: Estado actual de App - isLoggedIn:', isLoggedIn, 'userRole:', userRole);
 
 
   const handleLogin = (role) => {
+    console.log('handleLogin: Intentando iniciar sesión con rol:', role);
     setIsLoggedIn(true);
     setUserRole(role);
     localStorage.setItem('isLoggedIn', 'true');
     localStorage.setItem('userRole', role);
+    console.log('handleLogin: localStorage actualizado - isLoggedIn:', localStorage.getItem('isLoggedIn'), 'userRole:', localStorage.getItem('userRole'));
   };
 
   const handleLogout = () => {
+    console.log('handleLogout: Cerrando sesión.');
     setIsLoggedIn(false);
     setUserRole(null);
     localStorage.removeItem('isLoggedIn');
     localStorage.removeItem('userRole');
+    console.log('handleLogout: localStorage limpiado.');
   };
 
   const addItemToCart = (product, quantity) => {
