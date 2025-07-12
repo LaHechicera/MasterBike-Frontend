@@ -2,7 +2,10 @@
 # Etapa 1: Construcción (Build)
 # Esta etapa compila la aplicación de React
 # ----------------------------------------
-FROM node:18-alpine AS build
+# Etapa 1: Construcción (Build)
+FROM node:20-alpine AS build 
+
+# O una versión más reciente como node:22-alpine
 
 # Establece el directorio de trabajo dentro del contenedor
 WORKDIR /app
