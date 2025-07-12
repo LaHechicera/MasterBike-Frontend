@@ -21,10 +21,6 @@ import {
 } from '@mui/material';
 import axios from 'axios';
 
-// URL base de tu backend (compatible con Vite usando VITE_URL)
-const API_URL_BASE = import.meta.env.VITE_URL;
-const API_URL_INVENTORY = `${API_URL_BASE}/api/inventory`;
-
 // Componente ProductCard ajustado para la estética formal
 const ProductCard = ({ product, onAddToCart }) => {
   return (
@@ -49,38 +45,57 @@ const ProductCard = ({ product, onAddToCart }) => {
         component="img"
         height="194"
         sx={{ objectFit: 'contain' }}
-        image={product.imageUrl || 'https://via.placeholder.com/345x194.png?text=Sin+Imagen'}
+        image={product.imageUrl || 'https://via.placeholder.com/345x194?text=Producto'}
         alt={product.name}
       />
       <CardContent sx={{ flexGrow: 1 }}>
-        <Typography gutterBottom variant="h6" component="div">
+        {/* El texto del título usará el color definido en text.primary (negro) */}
+        <Typography gutterBottom variant="h6" component="div" sx={{ fontWeight: 'bold' }}>
           {product.name}
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          {product.brand} - {product.category}
+          Categoría: {product.category}
         </Typography>
-        <Typography variant="h5" color="primary" sx={{ mt: 1, fontWeight: 'bold' }}>
-          ${product.price ? product.price.toLocaleString('es-CL') : 'N/A'}
+        {product.category === 'Bicicleta' && (
+          <Typography variant="body2" color="text.secondary">
+            Tipo: {product.type || 'N/A'} | Marca: {product.brand || 'N/A'}
+          </Typography>
+        )}
+        {product.category === 'Repuesto' && (
+          <Typography variant="body2" color="text.secondary">
+            Tipo de Parte: {product.partType || 'N/A'} | Compatibilidad: {product.compatibility || 'N/A'}
+          </Typography>
+        )}
+        {/* El precio usará el color 'primary' (Verde Oliva) del tema */}
+        <Typography variant="h6" color="primary" sx={{ mt: 1, fontWeight: 'bold' }}>
+          ${product.price.toLocaleString('es-CL')}
         </Typography>
-        <Typography variant="body2" sx={{ mt: 1, color: product.stock > 0 ? 'success.main' : 'error.main' }}>
-          {product.stock > 0 ? `Stock: ${product.stock}` : 'Agotado'}
+        <Typography variant="body2" color="text.secondary">
+          Stock: {product.stock}
         </Typography>
       </CardContent>
-      <CardActions sx={{ mt: 'auto', p: 2 }}>
-        <Button 
-          size="small" 
-          variant="contained" 
-          disabled={product.stock <= 0} 
+      <CardActions sx={{ justifyContent: 'center', pb: 2 }}>
+        {/* El botón usará el estilo definido en el tema para 'variant="contained"' (verde oliva) */}
+        <Button
+          size="small"
+          variant="contained"
           onClick={() => onAddToCart(product)}
+          disabled={product.stock <= 0}
         >
-          Añadir al Carrito
+          {product.stock > 0 ? 'Añadir al Carrito' : 'Sin Stock'}
         </Button>
       </CardActions>
     </Card>
   );
 };
 
+
 function HomePage({ addItemToCart }) {
+  // Accede a la URL del backend desde las variables de entorno
+  const API_URL = import.meta.env.VITE_API_URL;
+  // URL de tu backend para el inventario
+  const API_URL_INVENTORY = `${API_URL}/api/inventory`;
+
   const [bikesForSale, setBikesForSale] = useState([]);
   const [sparePartsForSale, setSparePartsForSale] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -93,53 +108,65 @@ function HomePage({ addItemToCart }) {
   const [selectedProductForCart, setSelectedProductForCart] = useState(null);
   const [quantityToAdd, setQuantityToAdd] = useState(1);
 
+  const fetchInventoryItems = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get(API_URL_INVENTORY);
+      const allItems = response.data;
+
+      const bikes = allItems.filter(item => item.category === 'Bicicleta');
+      const spareParts = allItems.filter(item => item.category === 'Repuesto');
+
+      setBikesForSale(bikes);
+      setSparePartsForSale(spareParts);
+      setLoading(false);
+    } catch (err) {
+      console.error("Error al obtener ítems del inventario:", err);
+      setError("No se pudieron cargar los productos. Inténtalo de nuevo más tarde.");
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchInventory = async () => {
-      try {
-        const response = await axios.get(API_URL_INVENTORY);
-        const inventoryData = response.data;
-        
-        // Filtra y separa los productos
-        const bikes = inventoryData.filter(item => item.category === 'Bicicleta');
-        const spareParts = inventoryData.filter(item => item.category === 'Repuesto');
+    fetchInventoryItems();
+  }, [API_URL_INVENTORY]); // Añadido API_URL_INVENTORY a las dependencias
 
-        setBikesForSale(bikes);
-        setSparePartsForSale(spareParts);
-        setLoading(false);
-      } catch (err) {
-        console.error('Error al cargar el inventario:', err);
-        setError('No se pudo cargar el inventario. Por favor, intenta de nuevo más tarde.');
-        setLoading(false);
-        showSnackbar('Error al cargar el inventario', 'error');
-      }
-    };
-
-    fetchInventory();
-  }, []);
-
-  // Función para abrir el diálogo de cantidad y seleccionar el producto
-  const handleOpenQuantityDialog = (product) => {
+  const handleAddToCartClick = (product) => {
     setSelectedProductForCart(product);
-    setQuantityToAdd(1); // Resetear a 1 cada vez
+    setQuantityToAdd(1);
     setOpenQuantityDialog(true);
   };
 
   const handleCloseQuantityDialog = () => {
     setOpenQuantityDialog(false);
     setSelectedProductForCart(null);
+    setQuantityToAdd(1);
   };
 
   const handleQuantityChange = (event) => {
-    const value = parseInt(event.target.value, 10);
-    if (!isNaN(value) && value >= 1) {
+    const value = Math.max(1, parseInt(event.target.value, 10) || 1);
+    if (selectedProductForCart && value > selectedProductForCart.stock) {
+      setQuantityToAdd(selectedProductForCart.stock);
+      setSnackbarMessage(`Solo hay ${selectedProductForCart.stock} unidades disponibles.`);
+      setSnackbarSeverity('warning');
+      setSnackbarOpen(true);
+    } else {
       setQuantityToAdd(value);
     }
   };
 
-  const showSnackbar = (message, severity) => {
-    setSnackbarMessage(message);
-    setSnackbarSeverity(severity);
-    setSnackbarOpen(true);
+  const handleConfirmAddToCart = () => {
+    if (selectedProductForCart && quantityToAdd > 0) {
+      addItemToCart(selectedProductForCart, quantityToAdd);
+      setSnackbarMessage(`${quantityToAdd} x "${selectedProductForCart.name}" añadido(s) al carrito.`);
+      setSnackbarSeverity('success');
+      setSnackbarOpen(true);
+      handleCloseQuantityDialog();
+    } else {
+      setSnackbarMessage('Por favor, ingresa una cantidad válida.');
+      setSnackbarSeverity('error');
+      setSnackbarOpen(true);
+    }
   };
 
   const handleSnackbarClose = (event, reason) => {
@@ -149,37 +176,21 @@ function HomePage({ addItemToCart }) {
     setSnackbarOpen(false);
   };
 
-  const handleConfirmAddToCart = () => {
-    if (selectedProductForCart && quantityToAdd > 0 && quantityToAdd <= selectedProductForCart.stock) {
-      addItemToCart(selectedProductForCart, quantityToAdd);
-      showSnackbar(`${quantityToAdd} ${selectedProductForCart.name} añadido(s) al carrito.`, 'success');
-      handleCloseQuantityDialog();
-    } else {
-      showSnackbar('Cantidad inválida o superior al stock disponible.', 'error');
-    }
-  };
-
-  const renderProductCards = (products) => {
-    if (products.length === 0) {
-      return (
-        <Typography variant="body1" color="text.secondary" sx={{ mt: 2 }}>
+  const renderProductCards = (products) => (
+    <Grid container spacing={4} justifyContent="center">
+      {products.length > 0 ? (
+        products.map((product) => (
+          <Grid item key={product._id} xs={12} sm={6} md={4} lg={3}>
+            <ProductCard product={product} onAddToCart={handleAddToCartClick} />
+          </Grid>
+        ))
+      ) : (
+        <Typography variant="body1" color="text.secondary" sx={{ mt: 3 }}>
           No hay productos disponibles en esta categoría.
         </Typography>
-      );
-    }
-    return (
-      <Grid container spacing={4} sx={{ mt: 2 }}>
-        {products.map((product) => (
-          <Grid item key={product._id} xs={12} sm={6} md={4} lg={3}>
-            <ProductCard 
-              product={product} 
-              onAddToCart={handleOpenQuantityDialog} 
-            />
-          </Grid>
-        ))}
-      </Grid>
-    );
-  };
+      )}
+    </Grid>
+  );
 
   if (loading) {
     return (
@@ -192,7 +203,7 @@ function HomePage({ addItemToCart }) {
 
   if (error) {
     return (
-      <Container sx={{ mt: 4 }}>
+      <Container sx={{ textAlign: 'center', mt: 8 }}>
         <Alert severity="error">{error}</Alert>
       </Container>
     );
@@ -200,21 +211,56 @@ function HomePage({ addItemToCart }) {
 
   return (
     <Container sx={{ mt: 4, mb: 4 }}>
-      <Typography variant="h3" component="h1" gutterBottom sx={{ textAlign: 'center', fontWeight: 'bold' }}>
-        Inventario MasterBike
+      {/* Sección de Bienvenida de HomePage */}
+      <Box sx={{ textAlign: 'center', mt: 4, mb: 6 }}>
+        {/* Usamos el color de texto primario (negro) y bold para un aspecto formal */}
+        <Typography variant="h3" component="h1" gutterBottom sx={{ fontWeight: 'bold', color: 'text.primary' }}>
+          ¡Bienvenido a MasterBike!
+        </Typography>
+        <Typography variant="h6" sx={{ color: 'text.secondary' }}>
+          Tu destino para bicicletas, arriendo y reparaciones.
+        </Typography>
+        {/*<Box sx={{ mt: 4 }}>
+          <img
+            src="https://via.placeholder.com/600x300?text=Imagen+de+Bicicletas+Formal"
+            alt="Bicicletas"
+            style={{ maxWidth: '100%', height: 'auto', borderRadius: '8px', boxShadow: '0px 4px 10px rgba(0,0,0,0.1)' }}
+          />
+        </Box>   aqui se le agrega esa cosa de bicicletas*/}
+      </Box>
+
+      {/* Título de sección de productos - Estilo formal con borde verde oliva */}
+      <Typography 
+        variant="h4" 
+        component="h1" 
+        gutterBottom 
+        sx={{ 
+          textAlign: 'center', 
+          mb: 4, 
+          // Usamos el color primario para el borde inferior
+          borderBottom: '2px solid',
+          borderColor: 'primary.main',
+          pb: 1,
+          display: 'block',
+          color: 'text.primary' // Texto en negro para formalidad
+        }}
+      >
+        Nuestros Productos en Venta
       </Typography>
 
-      <Box sx={{ my: 6 }}>
-        <Typography variant="h5" component="h2" gutterBottom>
-          Bicicletas
+      {/* Sección de Bicicletas */}
+      <Box sx={{ my: 5 }}>
+        <Typography variant="h5" component="h2" gutterBottom sx={{ textAlign: 'center', mb: 3 }}>
+          Nuestras Bicicletas
         </Typography>
         {renderProductCards(bikesForSale)}
       </Box>
 
-      <Divider sx={{ my: 6 }} />
+      <Divider sx={{ my: 5 }} /> 
 
-      <Box>
-        <Typography variant="h5" component="h2" gutterBottom>
+      {/* Sección de Repuestos */}
+      <Box sx={{ my: 5 }}>
+        <Typography variant="h5" component="h2" gutterBottom sx={{ textAlign: 'center', mb: 3 }}>
           Repuestos
         </Typography>
         {renderProductCards(sparePartsForSale)}

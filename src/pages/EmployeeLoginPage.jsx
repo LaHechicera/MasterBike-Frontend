@@ -18,11 +18,11 @@ import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
-// 1. Define la URL base de la API compatible con Vite
-const API_URL_BASE = import.meta.env.VITE_URL;
-
 // Recibe handleLogin como prop
 function EmployeeLoginPage({ handleLogin }) {
+  // Accede a la URL del backend desde las variables de entorno
+  const API_URL = import.meta.env.VITE_API_URL;
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [snackbarOpen, setSnackbarOpen] = useState(false);
@@ -45,88 +45,89 @@ function EmployeeLoginPage({ handleLogin }) {
     setSnackbarOpen(false);
   };
 
-  const API_URL_LOGIN = `${API_URL_BASE}/api/employee/login`;
-  const API_URL_REGISTER_EMPLOYEE = `${API_URL_BASE}/api/employee/register`;
-
   const handleLoginSubmit = async (event) => {
     event.preventDefault();
 
     if (!email || !password) {
-      showSnackbar('Por favor, ingresa tu correo y contraseña.', 'warning');
-      return;
-    }
-
-    // Validación de correo para empleados (solo dominios @masterbike.cl)
-    if (!email.endsWith('@masterbike.cl')) {
-      showSnackbar('Solo empleados con dominio @masterbike.cl pueden iniciar sesión aquí.', 'error');
+      setSnackbarMessage('Por favor, ingresa tu correo y contraseña.');
+      setSnackbarSeverity('warning');
+      setSnackbarOpen(true);
       return;
     }
 
     try {
-      // Envía la petición de login al backend
-      const response = await axios.post(API_URL_LOGIN, { email, password });
+      const response = await axios.post(`${API_URL}/api/employee-login`, {
+        email,
+        password,
+      });
 
-      // Si el inicio de sesión es exitoso, se maneja el token y el usuario en App.jsx
-      handleLogin(response.data.token, response.data.user);
-      
-      showSnackbar('Inicio de sesión de empleado exitoso.', 'success');
-      
-      // Si el usuario es un administrador, activa el modo de registro de empleado
-      if (response.data.user.role === 'admin') {
+      console.log('Inicio de sesión exitoso:', response.data);
+      setSnackbarMessage(`¡Bienvenido, ${response.data.employee.firstName}!`);
+      setSnackbarSeverity('success');
+      setSnackbarOpen(true);
+
+      // Llama a handleLogin de App.jsx con el rol del empleado
+      handleLogin(response.data.employee.role);
+
+      if (response.data.employee.role === 'admin') {
         setLoggedInAsAdmin(true);
-        // Opcional: Redirigir a una página de administración si existe
-        // navigate('/admin-dashboard'); 
       } else {
-        // Redirigir a la página de inventario si es un empleado normal
-        navigate('/inventory'); 
+        setTimeout(() => {
+          navigate('/inventory'); // Redirige a la página de inventario para empleados normales
+        }, 2000);
       }
 
     } catch (error) {
-      console.error('Error durante el inicio de sesión de empleado:', error.response ? error.response.data : error.message);
-      const errorMessage = error.response?.data?.message || 'Error en el inicio de sesión. Credenciales inválidas o correo no registrado.';
-      showSnackbar(errorMessage, 'error');
+      console.error('Error durante el inicio de sesión:', error.response ? error.response.data : error.message);
+      setSnackbarMessage(error.response?.data?.message || 'Error al iniciar sesión. Verifica tus credenciales.');
+      setSnackbarSeverity('error');
+      setSnackbarOpen(true);
     }
   };
 
   const handleRegisterEmployeeSubmit = async (event) => {
     event.preventDefault();
 
-    if (!newEmployeeFirstName || !newEmployeeLastName || !newEmployeeEmail || !newEmployeePassword || !newEmployeeEmail.endsWith('@masterbike.cl')) {
-      showSnackbar('Por favor, completa todos los campos y asegúrate de usar un correo @masterbike.cl.', 'warning');
+    if (!newEmployeeFirstName || !newEmployeeLastName || !newEmployeeEmail || !newEmployeePassword) {
+      setSnackbarMessage('Por favor, completa todos los campos para registrar al nuevo empleado.');
+      setSnackbarSeverity('warning');
+      setSnackbarOpen(true);
+      return;
+    }
+
+    if (!newEmployeeEmail.endsWith('@masterbike.cl')) {
+      setSnackbarMessage('El correo del nuevo empleado debe terminar en @masterbike.cl');
+      setSnackbarSeverity('error');
+      setSnackbarOpen(true);
       return;
     }
 
     try {
-      // Envía la petición de registro de empleado al backend
-      const response = await axios.post(API_URL_REGISTER_EMPLOYEE, {
+      const response = await axios.post(`${API_URL}/api/employee-register`, {
         firstName: newEmployeeFirstName,
         lastName: newEmployeeLastName,
         email: newEmployeeEmail,
         password: newEmployeePassword,
-        role: isAdminMode ? 'admin' : 'employee', // Asigna el rol basado en el switch
+        adminEmail: email,
+        adminPassword: password
       });
 
-      console.log('Registro de empleado exitoso:', response.data);
-      showSnackbar('Nuevo empleado registrado exitosamente.', 'success');
-      
-      // Limpiar el formulario después del registro exitoso
+      console.log('Empleado registrado exitosamente:', response.data);
+      setSnackbarMessage(`Empleado ${response.data.employee.firstName} registrado exitosamente.`);
+      setSnackbarSeverity('success');
+      setSnackbarOpen(true);
+
       setNewEmployeeFirstName('');
       setNewEmployeeLastName('');
       setNewEmployeeEmail('');
       setNewEmployeePassword('');
-      setIsAdminMode(false);
 
     } catch (error) {
       console.error('Error durante el registro de empleado:', error.response ? error.response.data : error.message);
-      const errorMessage = error.response?.data?.message || 'Error en el registro del empleado. Asegúrate de que el correo no esté ya registrado.';
-      showSnackbar(errorMessage, 'error');
+      setSnackbarMessage(error.response?.data?.message || 'Error al registrar empleado.');
+      setSnackbarSeverity('error');
+      setSnackbarOpen(true);
     }
-  };
-
-  const showSnackbar = (message, severity) => {
-    setSnackbarMessage(message);
-    setSnackbarSeverity(severity);
-    setSnackbarOpen(true);
   };
 
   return (
@@ -137,72 +138,87 @@ function EmployeeLoginPage({ handleLogin }) {
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
+          p: 3,
+          boxShadow: 3,
+          borderRadius: 2,
+          bgcolor: 'background.paper',
         }}
       >
-        <Avatar sx={{ m: 1, bgcolor: 'primary.main' }}>
+        <Avatar sx={{ m: 1, bgcolor: 'secondary.main' }}>
           {loggedInAsAdmin ? <PersonAddIcon /> : <LockOutlinedIcon />}
         </Avatar>
         <Typography component="h1" variant="h5">
-          {loggedInAsAdmin ? 'Registrar Nuevo Empleado' : 'Inicio de Sesión de Empleado'}
+          {loggedInAsAdmin ? 'Registrar Nuevo Empleado' : 'Iniciar Sesión de Empleado'}
         </Typography>
 
-        {/* Formulario de Login de Empleado */}
-        {!loggedInAsAdmin ? (
-          <Box component="form" onSubmit={handleLoginSubmit} noValidate sx={{ mt: 1 }}>
-            <TextField
-              margin="normal"
-              required
-              fullWidth
-              id="email"
-              label="Correo Electrónico (@masterbike.cl)"
-              name="email"
-              autoComplete="email"
-              autoFocus
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-            <TextField
-              margin="normal"
-              required
-              fullWidth
-              name="password"
-              label="Contraseña"
-              type="password"
-              id="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-            <Button
-              type="submit"
-              fullWidth
-              variant="contained"
-              sx={{ mt: 3, mb: 2 }}
-            >
-              Iniciar Sesión
-            </Button>
-            <Grid container justifyContent="flex-end">
-              <Grid item>
-                <MuiLink component={Link} to="/login" variant="body2">
-                  Volver al Login de Cliente
-                </MuiLink>
-              </Grid>
-            </Grid>
-          </Box>
-        ) : (
-          /* Formulario de Registro de Empleado (solo si se ha iniciado sesión como Admin) */
-          <Box component="form" onSubmit={handleRegisterEmployeeSubmit} noValidate sx={{ mt: 1 }}>
+        {!loggedInAsAdmin && (
+          <>
             <FormControlLabel
               control={
                 <Switch
                   checked={isAdminMode}
-                  onChange={(e) => setIsAdminMode(e.target.checked)}
-                  name="isAdminMode"
+                  onChange={() => {
+                    setIsAdminMode(!isAdminMode);
+                    setEmail('');
+                    setPassword('');
+                  }}
+                  name="adminMode"
                   color="primary"
                 />
               }
-              label="Registrar como Administrador"
+              label={isAdminMode ? "Modo Administrador" : "Modo Empleado Normal"}
+              sx={{ mt: 2, mb: 1 }}
             />
+
+            <Box component="form" onSubmit={handleLoginSubmit} noValidate sx={{ mt: 1 }}>
+              <TextField
+                margin="normal"
+                required
+                fullWidth
+                id="email"
+                label={isAdminMode ? "Correo Electrónico de Administrador" : "Correo Electrónico de Empleado"}
+                name="email"
+                autoComplete="email"
+                autoFocus
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+              <TextField
+                margin="normal"
+                required
+                fullWidth
+                name="password"
+                label="Contraseña"
+                type="password"
+                id="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+              <Button
+                type="submit"
+                fullWidth
+                variant="contained"
+                sx={{ mt: 3, mb: 2 }}
+              >
+                Iniciar Sesión
+              </Button>
+              <Grid container>
+                <Grid item xs>
+                  <MuiLink href="#" variant="body2">
+                    ¿Olvidaste tu contraseña?
+                  </MuiLink>
+                </Grid>
+              </Grid>
+            </Box>
+          </>
+        )}
+
+        {loggedInAsAdmin && (
+          <Box component="form" onSubmit={handleRegisterEmployeeSubmit} noValidate sx={{ mt: 3 }}>
+            <Typography variant="h6" sx={{ mb: 2 }}>
+              Registrar Nuevo Empleado
+            </Typography>
             <TextField
               margin="normal"
               required

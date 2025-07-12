@@ -30,11 +30,6 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 
-// Nota: En Vite, las variables de entorno se acceden con import.meta.env y deben empezar con VITE_
-const API_URL_BASE = import.meta.env.VITE_URL;
-
-const API_URL = `${API_URL_BASE}/api/inventory`;
-
 // Estado inicial para un nuevo ítem/edición
 const defaultItemState = {
   id: null, // MongoDB usará _id, pero lo mantendremos para consistencia visual si es necesario
@@ -50,64 +45,101 @@ const defaultItemState = {
 };
 
 function InventoryPage() {
-  const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [open, setOpen] = useState(false);
-  const [currentItem, setCurrentItem] = useState(defaultItemState);
-  const [isEditing, setIsEditing] = useState(false);
+  // Accede a la URL del backend desde las variables de entorno
+  const API_URL_BASE = import.meta.env.VITE_API_URL;
+  // URL base de tu backend (ajusta si tu backend está en otro puerto/dominio)
+  const API_URL = `${API_URL_BASE}/api/inventory`;
+
+  const [inventory, setInventory] = useState([]); // Ahora se cargará desde la API
+  const [open, setOpen] = useState(false); // Estado para controlar la apertura/cierre del diálogo
+  const [currentItem, setCurrentItem] = useState({ ...defaultItemState }); // Estado para el ítem actual que se está añadiendo/editando
+  const [isEditing, setIsEditing] = useState(false); // Bandera para saber si estamos editando
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const [snackbarSeverity, setSnackbarSeverity] = useState('success');
 
+  // Cargar inventario al montar el componente
   useEffect(() => {
     fetchInventory();
-  }, []);
+  }, [API_URL]); // Añadido API_URL a las dependencias
 
-  // Función para obtener el inventario desde el backend
   const fetchInventory = async () => {
     try {
       const response = await axios.get(API_URL);
-      setItems(response.data);
-      setLoading(false);
-    } catch (err) {
-      console.error('Error al cargar el inventario:', err);
-      setError('Error al cargar el inventario. Asegúrate de que el servidor esté funcionando.');
-      setLoading(false);
-      showSnackbar('Error al cargar el inventario', 'error');
+      setInventory(response.data);
+    } catch (error) {
+      console.error('Error al obtener el inventario:', error);
+      setSnackbarMessage('Error al cargar el inventario.');
+      setSnackbarSeverity('error');
+      setSnackbarOpen(true);
     }
   };
 
-  // Función para abrir el diálogo de añadir/editar
-  const handleClickOpen = (item = defaultItemState, editing = false) => {
-    setCurrentItem(item);
-    setIsEditing(editing);
+  const handleOpen = () => {
+    setIsEditing(false);
+    setCurrentItem({ ...defaultItemState }); // Reiniciar el estado para un nuevo ítem
     setOpen(true);
   };
 
-  // Función para cerrar el diálogo
+  const handleEdit = (item) => {
+    setIsEditing(true);
+    setCurrentItem({ ...item, id: item._id }); // Usar _id de MongoDB como id
+    setOpen(true);
+  };
+
   const handleClose = () => {
     setOpen(false);
-    setCurrentItem(defaultItemState);
   };
 
-  // Manejador de cambios en el formulario
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setCurrentItem({
-      ...currentItem,
+    setCurrentItem((prev) => ({
+      ...prev,
       [name]: value,
-    });
+    }));
   };
 
-  // Mostrar Snackbar
-  const showSnackbar = (message, severity) => {
-    setSnackbarMessage(message);
-    setSnackbarSeverity(severity);
-    setSnackbarOpen(true);
+  const handleAddOrUpdateItem = async () => {
+    try {
+      if (isEditing) {
+        // Actualizar ítem existente
+        await axios.put(`${API_URL}/${currentItem.id}`, currentItem);
+        setSnackbarMessage('Ítem actualizado con éxito.');
+        setSnackbarSeverity('success');
+      } else {
+        // Añadir nuevo ítem
+        await axios.post(API_URL, currentItem);
+        setSnackbarMessage('Ítem añadido con éxito.');
+        setSnackbarSeverity('success');
+      }
+      setSnackbarOpen(true);
+      fetchInventory(); // Recargar el inventario después de añadir/actualizar
+      handleClose(); // Cerrar el diálogo
+    } catch (error) {
+      console.error('Error al guardar el ítem:', error);
+      setSnackbarMessage(`Error al guardar el ítem: ${error.response?.data?.message || error.message}`);
+      setSnackbarSeverity('error');
+      setSnackbarOpen(true);
+    }
   };
 
-  // Manejar el cierre del Snackbar
+  const handleDeleteItem = async (id) => {
+    if (window.confirm('¿Estás seguro de que quieres eliminar este ítem?')) {
+      try {
+        await axios.delete(`${API_URL}/${id}`);
+        setSnackbarMessage('Ítem eliminado con éxito.');
+        setSnackbarSeverity('success');
+        setSnackbarOpen(true);
+        fetchInventory(); // Recargar el inventario después de eliminar
+      } catch (error) {
+        console.error('Error al eliminar el ítem:', error);
+        setSnackbarMessage('Error al eliminar el ítem.');
+        setSnackbarSeverity('error');
+        setSnackbarOpen(true);
+      }
+    }
+  };
+
   const handleSnackbarClose = (event, reason) => {
     if (reason === 'clickaway') {
       return;
@@ -115,65 +147,10 @@ function InventoryPage() {
     setSnackbarOpen(false);
   };
 
-  // Manejar la adición o actualización de un ítem
-  const handleAddOrUpdateItem = async () => {
-    if (!currentItem.name || !currentItem.price || !currentItem.stock) {
-      showSnackbar('Por favor, completa los campos requeridos (Nombre, Precio, Stock).', 'warning');
-      return;
-    }
-
-    try {
-      if (isEditing) {
-        // Lógica de actualización (PUT)
-        await axios.put(`${API_URL}/${currentItem._id}`, currentItem);
-        showSnackbar('Ítem actualizado exitosamente', 'success');
-      } else {
-        // Lógica de adición (POST)
-        await axios.post(API_URL, currentItem);
-        showSnackbar('Ítem añadido exitosamente', 'success');
-      }
-      
-      fetchInventory(); // Actualizar la lista después de la operación
-      handleClose(); // Cerrar el diálogo
-    } catch (err) {
-      console.error('Error al guardar el ítem:', err);
-      showSnackbar(`Error al ${isEditing ? 'actualizar' : 'añadir'} el ítem.`, 'error');
-    }
+  // NUEVO: Función para redirigir a la página de Shimano
+  const handleGoToShimano = () => {
+    window.open('https://www.shimano.com/', '_blank'); // Abre en una nueva pestaña
   };
-
-  // Manejar la eliminación de un ítem
-  const handleDeleteItem = async (id) => {
-    if (window.confirm('¿Estás seguro de que quieres eliminar este ítem?')) {
-      try {
-        await axios.delete(`${API_URL}/${id}`);
-        fetchInventory();
-        showSnackbar('Ítem eliminado exitosamente', 'success');
-      } catch (err) {
-        console.error('Error al eliminar el ítem:', err);
-        showSnackbar('Error al eliminar el ítem.', 'error');
-      }
-    }
-  };
-
-  if (loading) {
-    return (
-      <Container>
-        <Typography variant="h5" align="center" sx={{ mt: 4 }}>
-          Cargando inventario...
-        </Typography>
-      </Container>
-    );
-  }
-
-  if (error) {
-    return (
-      <Container>
-        <Alert severity="error" sx={{ mt: 4 }}>
-          {error}
-        </Alert>
-      </Container>
-    );
-  }
 
   return (
     <Container sx={{ mt: 4, mb: 4 }}>
@@ -181,23 +158,32 @@ function InventoryPage() {
         Gestión de Inventario
       </Typography>
 
-      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'flex-end' }}>
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2, gap: 2 }}> {/* Añadido 'gap' para espacio entre botones */}
+        {/* Botón para añadir nuevo ítem */}
         <Button
           variant="contained"
           startIcon={<AddIcon />}
-          onClick={() => handleClickOpen(defaultItemState, false)}
+          onClick={handleOpen}
         >
-          Añadir Nuevo Ítem
+          Añadir Ítem
+        </Button>
+        {/* NUEVO: Botón para redirigir a Shimano */}
+        <Button
+          variant="outlined" // O 'contained' si prefieres
+          color="primary"
+          onClick={handleGoToShimano}
+        >
+          Ir a Shimano
         </Button>
       </Box>
 
       <TableContainer component={Paper}>
-        <Table sx={{ minWidth: 650 }} aria-label="inventory table">
+        <Table sx={{ minWidth: 650 }} aria-label="simple table">
           <TableHead>
             <TableRow>
               <TableCell>Nombre</TableCell>
               <TableCell>Categoría</TableCell>
-              <TableCell>Tipo</TableCell>
+              <TableCell>Tipo/Part Type</TableCell>
               <TableCell>Marca</TableCell>
               <TableCell align="right">Precio</TableCell>
               <TableCell align="right">Stock</TableCell>
@@ -205,19 +191,24 @@ function InventoryPage() {
             </TableRow>
           </TableHead>
           <TableBody>
-            {items.map((item) => (
-              <TableRow key={item._id}>
-                <TableCell>{item.name}</TableCell>
+            {inventory.map((item) => (
+              <TableRow
+                key={item._id}
+                sx={{ '&:last-child td, &:last-child th': { border: 0 } }}
+              >
+                <TableCell component="th" scope="row">
+                  {item.name}
+                </TableCell>
                 <TableCell>{item.category}</TableCell>
-                <TableCell>{item.type}</TableCell>
+                <TableCell>{item.category === 'Bicicleta' ? item.type : item.partType}</TableCell>
                 <TableCell>{item.brand}</TableCell>
-                <TableCell align="right">${item.price}</TableCell>
+                <TableCell align="right">${item.price.toLocaleString('es-CL')}</TableCell>
                 <TableCell align="right">{item.stock}</TableCell>
                 <TableCell align="center">
-                  <IconButton onClick={() => handleClickOpen(item, true)} color="primary">
+                  <IconButton color="primary" onClick={() => handleEdit(item)}>
                     <EditIcon />
                   </IconButton>
-                  <IconButton onClick={() => handleDeleteItem(item._id)} color="error">
+                  <IconButton color="error" onClick={() => handleDeleteItem(item._id)}>
                     <DeleteIcon />
                   </IconButton>
                 </TableCell>
@@ -227,7 +218,7 @@ function InventoryPage() {
         </Table>
       </TableContainer>
 
-      {/* Diálogo para añadir/editar */}
+      {/* Diálogo para añadir/editar ítem */}
       <Dialog open={open} onClose={handleClose}>
         <DialogTitle>{isEditing ? 'Editar Ítem' : 'Añadir Nuevo Ítem'}</DialogTitle>
         <DialogContent>
@@ -243,70 +234,105 @@ function InventoryPage() {
             onChange={handleChange}
             sx={{ mb: 2 }}
           />
-          
-          <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
-            <InputLabel>Categoría</InputLabel>
+          <FormControl fullWidth sx={{ mb: 2 }}>
+            <InputLabel id="category-label">Categoría</InputLabel>
             <Select
+              labelId="category-label"
               name="category"
               value={currentItem.category}
               label="Categoría"
               onChange={handleChange}
             >
+              <MenuItem value="">Selecciona Categoría</MenuItem>
               <MenuItem value="Bicicleta">Bicicleta</MenuItem>
               <MenuItem value="Repuesto">Repuesto</MenuItem>
+              <MenuItem value="Accesorio">Accesorio</MenuItem> {/* NUEVO: Opción de categoría 'Accesorio' */}
             </Select>
           </FormControl>
 
           {currentItem.category === 'Bicicleta' && (
-            <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
-              <InputLabel>Tipo</InputLabel>
-              <Select
+            <>
+              <TextField
+                margin="dense"
                 name="type"
+                label="Tipo de Bicicleta (Urbana, Montaña, Ruta, etc.)"
+                type="text"
+                fullWidth
+                variant="outlined"
                 value={currentItem.type}
-                label="Tipo"
                 onChange={handleChange}
-              >
-                <MenuItem value="MTB">Montaña (MTB)</MenuItem>
-                <MenuItem value="Ruta">Ruta</MenuItem>
-                <MenuItem value="Urbana">Urbana</MenuItem>
-                <MenuItem value="Eléctrica">Eléctrica</MenuItem>
-                <MenuItem value="BMX">BMX</MenuItem>
-                <MenuItem value="Niño">Niño</MenuItem>
-              </Select>
-            </FormControl>
+                sx={{ mb: 2 }}
+              />
+              <TextField
+                margin="dense"
+                name="brand"
+                label="Marca de Bicicleta"
+                type="text"
+                fullWidth
+                variant="outlined"
+                value={currentItem.brand}
+                onChange={handleChange}
+                sx={{ mb: 2 }}
+              />
+            </>
           )}
 
           {currentItem.category === 'Repuesto' && (
-            <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
-              <InputLabel>Tipo de Repuesto</InputLabel>
-              <Select
+            <Box>
+              <TextField
+                margin="dense"
                 name="partType"
+                label="Tipo de Repuesto (Cadena, Freno, Neumático, etc.)"
+                type="text"
+                fullWidth
+                variant="outlined"
                 value={currentItem.partType}
-                label="Tipo de Repuesto"
                 onChange={handleChange}
-              >
-                <MenuItem value="Cadena">Cadena</MenuItem>
-                <MenuItem value="Neumático">Neumático</MenuItem>
-                <MenuItem value="Freno">Freno</MenuItem>
-                <MenuItem value="Cambio">Cambio</MenuItem>
-                <MenuItem value="Asiento">Asiento</MenuItem>
-                <MenuItem value="Pedal">Pedal</MenuItem>
-                <MenuItem value="Accesorio">Accesorio</MenuItem>
-              </Select>
-            </FormControl>
+                sx={{ mb: 2 }}
+              />
+              <TextField
+                margin="dense"
+                name="compatibility"
+                label="Compatibilidad (MTB, Ruta, Universal, etc.)"
+                type="text"
+                fullWidth
+                variant="outlined"
+                value={currentItem.compatibility}
+                onChange={handleChange}
+                sx={{ mb: 2 }}
+              />
+            </Box>
           )}
 
-          <TextField
-            margin="dense"
-            name="brand"
-            label="Marca"
-            type="text"
-            fullWidth
-            variant="outlined"
-            value={currentItem.brand}
-            onChange={handleChange}
-            sx={{ mb: 2 }}
-          />
+          {/* NUEVO: Campos específicos para "Accesorio" si necesitas alguno (ej. material, color) */}
+          {currentItem.category === 'Accesorio' && (
+            <Box>
+              <TextField
+                margin="dense"
+                name="type" // Puedes reutilizar 'type' o crear 'accessoryType'
+                label="Tipo de Accesorio (Casco, Luz, Candado, etc.)"
+                type="text"
+                fullWidth
+                variant="outlined"
+                value={currentItem.type} // O currentItem.accessoryType
+                onChange={handleChange}
+                sx={{ mb: 2 }}
+              />
+              <TextField
+                margin="dense"
+                name="brand" // Puedes reutilizar 'brand' para la marca del accesorio
+                label="Marca de Accesorio"
+                type="text"
+                fullWidth
+                variant="outlined"
+                value={currentItem.brand} // O currentItem.accessoryBrand
+                onChange={handleChange}
+                sx={{ mb: 2 }}
+              />
+              {/* Puedes añadir más campos específicos para accesorios aquí si es necesario */}
+            </Box>
+          )}
+
           <TextField
             margin="dense"
             name="price"

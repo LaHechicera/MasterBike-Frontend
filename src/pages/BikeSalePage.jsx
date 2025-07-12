@@ -21,68 +21,11 @@ import {
 } from '@mui/material';
 import axios from 'axios';
 
-// 1. Define la URL base de la API (compatible con Vite usando VITE_URL)
-const API_URL_BASE = import.meta.env.VITE_URL;
-
-// Define la URL completa para el endpoint de inventario
-const API_URL_INVENTORY = `${API_URL_BASE}/api/inventory`;
-
-// Componente ProductCard ajustado para la estética formal
-const ProductCard = ({ product, onAddToCart }) => {
-  return (
-    <Card 
-      sx={{ 
-        height: 450, 
-        width: 300, 
-        display: 'flex', 
-        flexDirection: 'column',
-        // Añadir una sombra sutil y un borde para un aspecto más formal
-        boxShadow: 3, 
-        border: '1px solid #e0e0e0', 
-        borderRadius: '8px',
-        transition: 'transform 0.3s',
-        '&:hover': {
-          transform: 'translateY(-4px)',
-          boxShadow: 6,
-        }
-      }}
-    >
-      <CardMedia
-        component="img"
-        height="194"
-        sx={{ objectFit: 'contain' }}
-        image={product.imageUrl || 'https://via.placeholder.com/345x194.png?text=Sin+Imagen'}
-        alt={product.name}
-      />
-      <CardContent sx={{ flexGrow: 1 }}>
-        <Typography gutterBottom variant="h6" component="div">
-          {product.name}
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          {product.brand} - {product.category}
-        </Typography>
-        <Typography variant="h5" color="primary" sx={{ mt: 1, fontWeight: 'bold' }}>
-          ${product.price ? product.price.toLocaleString('es-CL') : 'N/A'}
-        </Typography>
-        <Typography variant="body2" sx={{ mt: 1, color: product.stock > 0 ? 'success.main' : 'error.main' }}>
-          {product.stock > 0 ? `Stock: ${product.stock}` : 'Agotado'}
-        </Typography>
-      </CardContent>
-      <CardActions sx={{ mt: 'auto', p: 2 }}>
-        <Button 
-          size="small" 
-          variant="contained" 
-          disabled={product.stock <= 0} 
-          onClick={() => onAddToCart(product)}
-        >
-          Añadir al Carrito
-        </Button>
-      </CardActions>
-    </Card>
-  );
-};
-
 function BikeSalePage({ addItemToCart }) {
+  // Accede a la URL del backend desde las variables de entorno
+  const API_URL = import.meta.env.VITE_API_URL;
+  const API_URL_INVENTORY = `${API_URL}/api/inventory`;
+
   const [bikesForSale, setBikesForSale] = useState([]);
   const [sparePartsForSale, setSparePartsForSale] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -95,55 +38,27 @@ function BikeSalePage({ addItemToCart }) {
   const [selectedProductForCart, setSelectedProductForCart] = useState(null);
   const [quantityToAdd, setQuantityToAdd] = useState(1);
 
-  // useEffect para cargar el inventario al montar el componente
   useEffect(() => {
     const fetchInventory = async () => {
       try {
         const response = await axios.get(API_URL_INVENTORY);
-        const inventoryData = response.data;
-        
-        // Filtra y separa los productos por categoría
-        const bikes = inventoryData.filter(item => item.category === 'Bicicleta');
-        const spareParts = inventoryData.filter(item => item.category === 'Repuesto');
-
+        const bikes = response.data.filter(item => item.category === 'Bicicleta');
+        const spareParts = response.data.filter(item => item.category === 'Repuesto');
         setBikesForSale(bikes);
         setSparePartsForSale(spareParts);
-        setLoading(false);
       } catch (err) {
-        console.error('Error al cargar el inventario:', err);
-        setError('No se pudo cargar el inventario. Por favor, intenta de nuevo más tarde.');
+        console.error('Error al obtener el inventario:', err);
+        setError('No se pudo cargar el inventario. Inténtalo de nuevo más tarde.');
+        setSnackbarMessage('Error al cargar el inventario.');
+        setSnackbarSeverity('error');
+        setSnackbarOpen(true);
+      } finally {
         setLoading(false);
-        showSnackbar('Error al cargar el inventario', 'error');
       }
     };
 
     fetchInventory();
-  }, []);
-
-  // Función para abrir el diálogo de cantidad y seleccionar el producto
-  const handleOpenQuantityDialog = (product) => {
-    setSelectedProductForCart(product);
-    setQuantityToAdd(1); // Resetear a 1 cada vez
-    setOpenQuantityDialog(true);
-  };
-
-  const handleCloseQuantityDialog = () => {
-    setOpenQuantityDialog(false);
-    setSelectedProductForCart(null);
-  };
-
-  const handleQuantityChange = (event) => {
-    const value = parseInt(event.target.value, 10);
-    if (!isNaN(value) && value >= 1) {
-      setQuantityToAdd(value);
-    }
-  };
-
-  const showSnackbar = (message, severity) => {
-    setSnackbarMessage(message);
-    setSnackbarSeverity(severity);
-    setSnackbarOpen(true);
-  };
+  }, [API_URL_INVENTORY]); // Añadido API_URL_INVENTORY a las dependencias
 
   const handleSnackbarClose = (event, reason) => {
     if (reason === 'clickaway') {
@@ -152,63 +67,131 @@ function BikeSalePage({ addItemToCart }) {
     setSnackbarOpen(false);
   };
 
-  // Función para confirmar la adición al carrito
-  const handleConfirmAddToCart = () => {
-    if (selectedProductForCart && quantityToAdd > 0 && quantityToAdd <= selectedProductForCart.stock) {
-      addItemToCart(selectedProductForCart, quantityToAdd);
-      showSnackbar(`${quantityToAdd} ${selectedProductForCart.name} añadido(s) al carrito.`, 'success');
-      handleCloseQuantityDialog();
+  const handleAddToCartClick = (product) => {
+    if (product.stock === 0) {
+      setSnackbarMessage(`Lo sentimos, "${product.name}" está agotado.`);
+      setSnackbarSeverity('error');
+      setSnackbarOpen(true);
+      return;
+    }
+    setSelectedProductForCart(product);
+    setQuantityToAdd(1);
+    setOpenQuantityDialog(true);
+  };
+
+  const handleCloseQuantityDialog = () => {
+    setOpenQuantityDialog(false);
+    setSelectedProductForCart(null);
+    setQuantityToAdd(1);
+  };
+
+  const handleQuantityChange = (event) => {
+    const value = parseInt(event.target.value);
+    if (!isNaN(value) && value >= 1) {
+      if (selectedProductForCart && value > selectedProductForCart.stock) {
+        setQuantityToAdd(selectedProductForCart.stock);
+        setSnackbarMessage(`Cantidad máxima para ${selectedProductForCart.name} es ${selectedProductForCart.stock}.`);
+        setSnackbarSeverity('warning');
+        setSnackbarOpen(true);
+      } else {
+        setQuantityToAdd(value);
+      }
     } else {
-      showSnackbar('Cantidad inválida o superior al stock disponible.', 'error');
+      setQuantityToAdd(1);
     }
   };
 
-  const renderProductCards = (products) => {
-    if (products.length === 0) {
-      return (
-        <Typography variant="body1" color="text.secondary" sx={{ mt: 2 }}>
-          No hay productos disponibles en esta categoría.
-        </Typography>
-      );
+  const handleConfirmAddToCart = () => {
+    if (selectedProductForCart && quantityToAdd > 0 && quantityToAdd <= selectedProductForCart.stock) {
+        addItemToCart(selectedProductForCart, quantityToAdd);
+        setSnackbarMessage(`${quantityToAdd} ${selectedProductForCart.name}(s) añadido(s) al carrito.`);
+        setSnackbarSeverity('success');
+    } else {
+        setSnackbarMessage('Por favor, selecciona una cantidad válida y dentro del stock disponible.');
+        setSnackbarSeverity('error');
     }
-    return (
-      <Grid container spacing={4} sx={{ mt: 2 }}>
-        {products.map((product) => (
-          <Grid item key={product._id} xs={12} sm={6} md={4} lg={3}>
-            <ProductCard 
-              product={product} 
-              onAddToCart={handleOpenQuantityDialog} 
-            />
-          </Grid>
-        ))}
-      </Grid>
-    );
+    setSnackbarOpen(true);
+    handleCloseQuantityDialog();
   };
+
+  const renderProductCards = (products) => (
+    <Grid container spacing={3}>
+      {products.map((product) => (
+        <Grid item key={product._id} xs={12} sm={6} md={4} lg={3}>
+          <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column', boxShadow: 3 }}>
+            <CardMedia
+              component="img"
+              height="200"
+              image={product.imageUrl || 'https://via.placeholder.com/200'}
+              alt={product.name}
+              sx={{ objectFit: 'contain', pt: 2 }}
+            />
+            <CardContent sx={{ flexGrow: 1 }}>
+              <Typography gutterBottom variant="h6" component="div">
+                {product.name}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Categoría: {product.category}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Marca: {product.brand}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Talla: {product.size}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Material: {product.material}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Color: {product.color}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Stock: {product.stock}
+              </Typography>
+              <Typography variant="h6" color="text.primary" sx={{ mt: 1 }}>
+                ${product.price.toLocaleString('es-CL')}
+              </Typography>
+            </CardContent>
+            <CardActions sx={{ mt: 'auto' }}>
+              <Button
+                size="small"
+                color="primary"
+                onClick={() => handleAddToCartClick(product)}
+                disabled={product.stock === 0}
+              >
+                {product.stock === 0 ? 'Agotado' : 'Añadir al Carrito'}
+              </Button>
+            </CardActions>
+          </Card>
+        </Grid>
+      ))}
+    </Grid>
+  );
 
   if (loading) {
     return (
-      <Container sx={{ textAlign: 'center', mt: 8 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
         <CircularProgress />
-        <Typography variant="h6" sx={{ mt: 2 }}>Cargando productos...</Typography>
-      </Container>
+        <Typography variant="h6" sx={{ ml: 2 }}>Cargando inventario...</Typography>
+      </Box>
     );
   }
 
   if (error) {
     return (
-      <Container sx={{ mt: 4 }}>
-        <Alert severity="error">{error}</Alert>
-      </Container>
+      <Alert severity="error" sx={{ mt: 4 }}>
+        {error}
+      </Alert>
     );
   }
 
   return (
     <Container sx={{ mt: 4, mb: 4 }}>
-      <Typography variant="h3" component="h1" gutterBottom sx={{ textAlign: 'center', fontWeight: 'bold' }}>
-        Inventario MasterBike
+      <Typography variant="h4" component="h1" gutterBottom sx={{ textAlign: 'center', mb: 4 }}>
+        Explora Nuestras Bicicletas y Repuestos
       </Typography>
 
-      <Box sx={{ my: 6 }}>
+      <Box sx={{ mb: 6 }}>
         <Typography variant="h5" component="h2" gutterBottom>
           Bicicletas
         </Typography>

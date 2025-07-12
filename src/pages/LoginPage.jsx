@@ -12,15 +12,15 @@ import {
   Snackbar
 } from '@mui/material';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
-import WorkIcon from '@mui/icons-material/Work';
-import { Link, useNavigate } from 'react-router-dom';
+import WorkIcon from '@mui/icons-material/Work'; // Importa un icono de trabajo para empleados
+import { Link, useNavigate } from 'react-router-dom'; // Corrección aquí: '=>' cambiado a 'from'
 import axios from 'axios';
-
-// 1. Define la URL base de la API compatible con Vite
-const API_URL_BASE = import.meta.env.VITE_URL; 
 
 // Recibe handleLogin como prop
 function LoginPage({ handleLogin }) {
+  // Accede a la URL del backend desde las variables de entorno
+  const API_URL = import.meta.env.VITE_API_URL;
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [snackbarOpen, setSnackbarOpen] = useState(false);
@@ -39,26 +39,26 @@ function LoginPage({ handleLogin }) {
     }
 
     try {
-      // Usa la URL base definida para la petición de login
-      const response = await axios.post(`${API_URL_BASE}/api/login`, { 
+      const response = await axios.post(`${API_URL}/api/login`, {
         email,
         password,
       });
 
       console.log('Inicio de sesión exitoso:', response.data);
-      handleLogin(response.data.token, response.data.user);
-      
-      setSnackbarMessage('Inicio de sesión exitoso.');
+      setSnackbarMessage(`¡Bienvenido, ${response.data.user.firstName}!`);
       setSnackbarSeverity('success');
       setSnackbarOpen(true);
-      
-      // Redireccionar al usuario a la página de inicio (HomePage) después de un inicio de sesión exitoso
-      navigate('/');
+
+      // Llama a handleLogin de App.jsx para actualizar el estado global
+      handleLogin('client'); // Asigna el rol 'client' para usuarios normales
+
+      setTimeout(() => {
+        navigate('/');
+      }, 2000);
 
     } catch (error) {
       console.error('Error durante el inicio de sesión:', error.response ? error.response.data : error.message);
-      const errorMessage = error.response?.data?.message || 'Error en el inicio de sesión.';
-      setSnackbarMessage(errorMessage);
+      setSnackbarMessage(error.response?.data?.message || 'Error al iniciar sesión. Verifica tus credenciales.');
       setSnackbarSeverity('error');
       setSnackbarOpen(true);
     }
@@ -79,6 +79,10 @@ function LoginPage({ handleLogin }) {
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
+          p: 3,
+          boxShadow: 3,
+          borderRadius: 2,
+          bgcolor: 'background.paper',
         }}
       >
         <Avatar sx={{ m: 1, bgcolor: 'secondary.main' }}>
@@ -122,7 +126,9 @@ function LoginPage({ handleLogin }) {
           </Button>
           <Grid container>
             <Grid item xs>
-              {/* Opción para recuperar contraseña si la tienes implementada */}
+              <MuiLink href="#" variant="body2">
+                ¿Olvidaste tu contraseña?
+              </MuiLink>
             </Grid>
             <Grid item>
               <MuiLink component={Link} to="/register" variant="body2">
@@ -135,18 +141,18 @@ function LoginPage({ handleLogin }) {
             <Button
               component={Link}
               to="/employee-login"
-              variant="outlined" 
-              color="primary"
+              variant="outlined" // O "contained" para un botón más prominente
+              color="primary" // O "secondary" o un color personalizado
               fullWidth
-              startIcon={<WorkIcon />} 
+              startIcon={<WorkIcon />} // Icono de trabajo
               sx={{
                 mt: 2,
-                py: 1.5, 
-                fontSize: '1rem',
-                fontWeight: 'bold',
-                boxShadow: 3,
+                py: 1.5, // Padding vertical
+                fontSize: '1rem', // Tamaño de fuente
+                fontWeight: 'bold', // Negrita
+                boxShadow: 3, // Sombra para un efecto 3D
                 '&:hover': {
-                  boxShadow: 6,
+                  boxShadow: 6, // Sombra más grande al pasar el ratón
                 },
               }}
             >

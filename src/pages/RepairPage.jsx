@@ -31,14 +31,15 @@ import EditIcon from '@mui/icons-material/Edit';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
-// URL base de tu backend para las reparaciones
-const API_URL_BASE = import.meta.env.VITE_URL;
-const API_URL_REPAIRS = `${API_URL_BASE}/api/repairs`;
-
-const repairSteps = ['Detalles de la Bicicleta', 'Descripción del Problema', 'Información de Contacto', 'Confirmación'];
-const repairStatuses = ['Pendiente', 'En Proceso', 'Completada', 'Cancelada'];
-
 function RepairPage({ userRole }) {
+  // Accede a la URL del backend desde las variables de entorno
+  const API_URL = import.meta.env.VITE_API_URL;
+  // URL base de tu backend para las reparaciones
+  const API_URL_REPAIRS = `${API_URL}/api/repairs`;
+
+  const repairSteps = ['Detalles de la Bicicleta', 'Descripción del Problema', 'Información de Contacto', 'Confirmación'];
+  const repairStatuses = ['Pendiente', 'En Proceso', 'Completada', 'Cancelada'];
+
   const [activeStep, setActiveStep] = useState(0);
   const [bikeType, setBikeType] = useState('');
   const [bikeBrand, setBikeBrand] = useState('');
@@ -60,7 +61,7 @@ function RepairPage({ userRole }) {
     if (isEmployeeOrAdmin) {
       fetchRepairRequests();
     }
-  }, [userRole, isEmployeeOrAdmin]);
+  }, [userRole, isEmployeeOrAdmin, API_URL]); // Añadido API_URL a las dependencias
 
   const fetchRepairRequests = async () => {
     try {
